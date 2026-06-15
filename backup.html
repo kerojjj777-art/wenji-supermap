@@ -1,0 +1,1727 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>汶記Super Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <style>
+        :root {
+            --primary: #4A5568; --bg: #f7fafc; --border: #e2e8f0;
+            --chat: rgba(250, 204, 21, 0.85); /* 黃色 */
+            --quote: rgba(239, 68, 68, 0.85);  /* 紅色 */
+            --both: rgba(249, 115, 22, 0.85);  /* 橘色 */
+            --none: rgba(255, 255, 255, 0.85); /* 白色 */
+        }
+        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
+        
+        /* 地圖與標題區 */
+        #map { height: 100vh; width: 100vw; z-index: 1; }
+        .header { position: absolute; top: 15px; left: 15px; z-index: 1000; background: white; padding: 10px 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .header h1 { margin: 0; font-size: 24px; color: #2d3748; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.1); }
+        .header .version { font-size: 12px; color: #a0aec0; margin-top: 2px; font-weight: bold; }
+        
+        /* 網頁版右上方 - 展開式工具列切換按鈕與月曆 */
+        .desktop-calendar-btn {
+            position: absolute; top: 15px; right: 175px; z-index: 2000;
+            background: white; border: 1px solid #cbd5e0; font-size: 20px; color: #2d3748;
+            border-radius: 8px; padding: 7px 15px; cursor: pointer; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s;
+        }
+        .desktop-calendar-btn:hover { background: #f7fafc; }
+
+        .desktop-toggle-btn {
+            position: absolute; top: 15px; right: 15px; z-index: 2000;
+            background: white; border: 1px solid #cbd5e0; font-size: 15px; color: #2d3748;
+            border-radius: 8px; padding: 10px 20px; font-weight: bold; cursor: pointer; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s, box-shadow 0.2s;
+        }
+        .desktop-toggle-btn:hover { background: #f7fafc; box-shadow: 0 6px 12px rgba(0,0,0,0.15); }
+
+        /* 右上角選單 - 儀表板下拉排版 */
+        .top-menu { 
+            display: none; position: absolute; top: 65px; right: 15px; z-index: 1000; 
+            background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px);
+            padding: 20px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); 
+            flex-direction: column; gap: 15px; border: 1px solid var(--border); width: 320px;
+            transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .top-menu.active { display: flex; animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+
+        /* 側邊欄展開時的聯動滑動效果 (僅限電腦版) */
+        @media (min-width: 769px) {
+            body.sidebar-open .desktop-toggle-btn, body.sidebar-open .top-menu { right: 415px; }
+            body.sidebar-open .desktop-calendar-btn { right: 575px; }
+        }
+
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-15px); } to { opacity: 1; transform: translateY(0); } }
+
+        .menu-group-main { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+        .menu-group-main button { width: 100%; text-align: center; padding: 12px; font-size: 14px; }
+        
+        .menu-group-data { display: flex; flex-direction: column; gap: 8px; background: #edf2f7; padding: 12px; border-radius: 8px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); }
+        .menu-group-data > div { display: flex; gap: 8px; }
+        .menu-group-data > div button { flex: 1; }
+        
+        button { border: none; border-radius: 6px; background-color: white; color: #2d3748; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: 0.2s; }
+        button:hover { background-color: #e2e8f0; }
+        .btn-primary { background-color: #3182ce; color: white; }
+        .btn-primary:hover { background-color: #2b6cb0; }
+        .btn-danger { background-color: #e53e3e; color: white; }
+        .btn-danger:hover { background-color: #c53030; }
+        
+        /* 彈跳視窗共用設定 */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2500; justify-content: center; align-items: center; }
+        .modal { background: white; padding: 25px; border-radius: 10px; width: 440px; max-width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.2); position: relative; }
+        .modal h2 { margin-top: 0; margin-bottom: 20px; color: #2d3748; border-bottom: 2px solid var(--border); padding-bottom: 10px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; }
+        .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        
+        /* 紅色圓形關閉按鈕 */
+        .close-icon-btn { position: absolute; top: 12px; right: 12px; width: 28px; height: 28px; background: #e53e3e; color: white; border: none; border-radius: 50%; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 100; transition: background 0.2s; padding: 0; line-height: 1; }
+        .close-icon-btn:hover { background: #c53030; }
+
+        /* 圖片放大專用模態框 */
+        #imageZoomModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; justify-content: center; align-items: center; cursor: zoom-out; }
+        #imageZoomModal img { max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 2px solid #e2e8f0; }
+
+        /* 月曆專屬樣式 */
+        #calendarModal .modal { background-color: #B3CAD8; border: none; }
+        #calendarModal h2 { color: #ffffff; border-bottom: 2px solid rgba(255,255,255,0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        #calendarMonthYear { color: #ffffff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-top: 10px; }
+        .calendar-header-day { text-align: center; font-weight: bold; background: rgba(255,255,255,0.6); padding: 8px 0; border-radius: 4px; font-size: 13px; color: #2d3748; }
+        .calendar-day { min-height: 80px; border: none; border-radius: 6px; padding: 5px; display: flex; flex-direction: column; background: #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .calendar-day.empty { background: rgba(255,255,255,0.3); border: 1px dashed rgba(255,255,255,0.5); box-shadow: none; }
+        .calendar-day.today { border: 2px solid #ed8936; }
+        .calendar-date { font-size: 12px; font-weight: bold; color: #718096; margin-bottom: 4px; text-align: right; }
+        .calendar-event { font-size: 11px; padding: 3px 5px; border-radius: 4px; margin-bottom: 3px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid rgba(0,0,0,0.05); color: #2d3748; }
+        
+        /* 近期動態氣泡浮動特效與箭頭背景 */
+        @keyframes floatAnim {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+        .recent-arrow-bg {
+            position: absolute; top: 50%; left: 0px; right: 0px; height: 60px;
+            transform: translateY(-50%); background: #fbd38d; 
+            clip-path: polygon(0 50%, 15px 0, 100% 0, 100% 100%, 15px 100%);
+            z-index: 0; display: flex; align-items: center; padding-left: 20px;
+        }
+        .flash-new {
+            color: white; font-weight: bold; font-size: 14px;
+            animation: flashText 1s infinite alternate; letter-spacing: 1px;
+            text-shadow: 0px 1px 2px rgba(0,0,0,0.2);
+        }
+        @keyframes flashText { 0% { opacity: 0.5; } 100% { opacity: 1; text-shadow: 0 0 6px white; } }
+        
+        .recent-bubble-wrapper { display: flex; gap: 12px; padding: 10px 5px; justify-content: center; }
+        .recent-bubble {
+            width: 85px; height: 85px; border-radius: 50%;
+            background: rgba(43, 108, 176, 0.08); 
+            border: 1.5px solid rgba(43, 108, 176, 0.3);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            text-align: center; cursor: pointer; padding: 8px; box-sizing: border-box;
+            animation: floatAnim 3s ease-in-out infinite;
+            transition: all 0.2s;
+            position: relative;
+        }
+        .recent-bubble:hover { background: rgba(43, 108, 176, 0.15); border-color: #3182ce; box-shadow: 0 6px 12px rgba(49,130,206,0.15); transform: scale(1.05); }
+        .recent-bubble:nth-child(1) { animation-delay: 0s; }
+        .recent-bubble:nth-child(2) { animation-delay: 0.5s; }
+        .recent-bubble:nth-child(3) { animation-delay: 1s; }
+        .recent-bubble .rb-date { font-size: 10px; font-weight: bold; color: #718096; margin-bottom: 2px; }
+        .recent-bubble .rb-title { font-size: 11px; font-weight: bold; color: #2b6cb0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+        /* 商品列表 - 動作下拉選單樣式 (已優化圖層與方向) */
+        .action-menu-content { display: none; position: absolute; top: 100%; right: 0; background: white; min-width: 90px; box-shadow: 0px 4px 12px rgba(0,0,0,0.15); z-index: 9999; border-radius: 6px; overflow: hidden; flex-direction: column; margin-top: 5px; border: 1px solid #cbd5e0; }
+        .action-menu-content button { width: 100%; text-align: center; padding: 8px 12px; border-radius: 0; box-shadow: none; border-bottom: 1px solid #edf2f7; font-size: 13px; }
+        .action-menu-content button:last-child { border-bottom: none; }
+        .action-menu-content.show { display: flex; animation: slideDownMenu 0.2s ease-out; }
+        @keyframes slideDownMenu { from { opacity:0; transform: translateY(-10px); } to { opacity:1; transform: translateY(0); } }
+
+        /* 右側滑出面板 (客戶清單) */
+        #sidebar { position: fixed; top: 0; right: -400px; width: 400px; max-width: 100%; height: 100vh; background: white; z-index: 1500; transition: right 0.3s ease; box-shadow: -5px 0 15px rgba(0,0,0,0.1); overflow-y: auto; padding: 20px; box-sizing: border-box; }
+        #sidebar.active { right: 0; }
+        .sidebar-header { display: flex; justify-content: flex-start; align-items: center; border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-bottom: 15px; gap: 15px; }
+        .sidebar-header h2 { margin: 0; }
+        
+        /* 客戶卡片 */
+        .customer-card { border: 1px solid var(--border); padding: 15px; border-radius: 8px; margin-bottom: 15px; background: var(--bg); transition: all 0.2s ease; cursor: default; }
+        .customer-card:hover { border-color: #3182ce; box-shadow: 0 0 12px rgba(49, 130, 206, 0.4); transform: translateY(-2px); background: white; }
+        .customer-card h3 { margin: 0 0 10px 0; color: #2d3748; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 5px; }
+        .customer-card p { margin: 5px 0; font-size: 14px; }
+        
+        /* 狀態發光點特效 */
+        .status-badge { display: inline-flex; align-items: center; font-size: 12px; font-weight: bold; padding: 2px 6px; border-radius: 4px; }
+        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; position: relative; }
+        .dot-dealed { background-color: #48bb78; box-shadow: 0 0 10px #48bb78, 0 0 4px #48bb78; animation: pulse-green 2s infinite; }
+        .dot-developing { background-color: #3182ce; box-shadow: 0 0 10px #3182ce, 0 0 4px #3182ce; animation: pulse-blue 2s infinite; }
+        
+        @keyframes pulse-green { 0% { box-shadow: 0 0 4px #48bb78; } 50% { box-shadow: 0 0 12px #48bb78, 0 0 6px #48bb78; } 100% { box-shadow: 0 0 4px #48bb78; } }
+        @keyframes pulse-blue { 0% { box-shadow: 0 0 4px #3182ce; } 50% { box-shadow: 0 0 12px #3182ce, 0 0 6px #3182ce; } 100% { box-shadow: 0 0 4px #3182ce; } }
+
+        /* 戰情看板與儀表板UI */
+        .stat-box { background: #edf2f7; padding: 15px; border-radius: 8px; text-align: center; flex: 1; border: 1px solid #e2e8f0; }
+        .stat-value { font-size: 24px; font-weight: bold; color: #2d3748; }
+        .stat-label { font-size: 12px; color: #718096; margin-top: 5px; }
+        .bar-container { width: 100%; background: #e2e8f0; border-radius: 4px; overflow: hidden; height: 12px; margin-top: 5px; }
+        .bar-fill { height: 100%; background: #3182ce; transition: width 0.5s ease; }
+        .glass-dashboard { background: linear-gradient(135deg, rgba(237, 242, 247, 0.9), rgba(226, 232, 240, 0.6)); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 16px; padding: 16px; margin-bottom: 20px; box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.6), 0 4px 10px rgba(0,0,0,0.05); position: relative; overflow: hidden; }
+        .glass-dashboard::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: #3182ce; }
+        .feed-item { padding: 10px 12px; background: rgba(255, 255, 255, 0.7); border-radius: 10px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.03); cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(255,255,255,0.9); }
+        .feed-item:hover { background: rgba(255, 255, 255, 1); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.08); border-color: #cbd5e0; }
+        .quote-row-item { background: white; border: 1px solid #e2e8f0; padding: 10px; border-radius: 6px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+
+        /* 洽談紀錄時間線 */
+        .timeline-container { display: flex; flex-direction: column; position: relative; margin-top: 15px; }
+        .timeline-line { position: absolute; left: 20px; top: 0; bottom: 0; width: 4px; background: #cbd5e0; }
+        .timeline-item { position: relative; margin-bottom: 20px; padding-left: 50px; }
+        .timeline-bubble { padding: 15px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 1px solid rgba(0,0,0,0.05); position: relative; }
+        .timeline-bubble::before { content: ''; position: absolute; left: -34px; top: 15px; width: 12px; height: 12px; border-radius: 50%; background: #4a5568; z-index: 2; border: 3px solid white; }
+        .timeline-bubble::after { content: ''; position: absolute; left: -15px; top: 20px; width: 15px; height: 2px; background: #cbd5e0; }
+        .bubble-yellow { background-color: var(--chat); color: #2d3748; }
+        .bubble-red { background-color: var(--quote); color: white; }
+        .bubble-orange { background-color: var(--both); color: white; }
+        .bubble-white { background-color: var(--none); color: #2d3748; }
+        .timeline-date { font-size: 12px; font-weight: bold; margin-bottom: 5px; opacity: 0.8; }
+        
+        /* 老闆屬性與便利貼拖曳設計 */
+        .sticky-note { position: absolute; width: 85px; height: 85px; box-shadow: 2px 3px 6px rgba(0,0,0,0.25); padding: 18px 6px 6px 6px; border-radius: 2px; cursor: grab; z-index: 10; }
+        .sticky-note:active { cursor: grabbing; z-index: 100; box-shadow: 4px 6px 10px rgba(0,0,0,0.3); }
+        .sticky-note textarea { width: 100%; height: 100%; border: none; background: transparent; resize: none; font-size: 12px; outline: none; color: #2d3748; line-height: 1.4; font-weight:bold; }
+        .sticky-note .delete-note { position: absolute; top: 0; right: 0; background: rgba(0,0,0,0.08); color: #c53030; font-weight:bold; border: none; width: 18px; height: 18px; font-size: 10px; cursor: pointer; border-radius:0 2px 0 4px; padding:0; }
+        .note-pink { background: #fbb6ce; } .note-yellow { background: #fef08a; } .note-green { background: #9ae6b4; }
+        .note-spinner { position: absolute; top: 50%; left: 50%; width: 24px; height: 24px; margin: -12px 0 0 -12px; border: 3px solid rgba(255,255,255,0.6); border-top-color: #3182ce; border-radius: 50%; animation: noteSpin 1s linear forwards; display: none; z-index: 20; pointer-events: none; }
+        @keyframes noteSpin { 0% { transform: rotate(0deg); opacity: 0; } 10% { opacity: 1; } 100% { transform: rotate(360deg); opacity: 1; } }
+
+        .quick-zoom { position: absolute; bottom: 20px; left: 15px; z-index: 1000; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+        .quick-zoom select { padding: 8px; font-size: 14px; border-radius: 4px; border: 1px solid var(--border); }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid var(--border); padding: 8px; text-align: left; font-size: 14px; }
+        th { background-color: #edf2f7; color: #2d3748; font-weight: bold; }
+
+        .preview-img-container { width: 100%; height: 200px; background: #edf2f7; border-radius: 8px; margin-bottom: 15px; overflow: hidden; display: flex; justify-content: center; align-items: center; border: 1px solid #e2e8f0; cursor: pointer; transition: 0.2s; }
+        .preview-img-container:hover { border-color: #3182ce; box-shadow: 0 0 10px rgba(49, 130, 206, 0.3); }
+        .preview-img-container img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+        /* 財神爺特效 */
+        #caishenContainer { position: absolute; bottom: 80px; left: 80px; z-index: 1000; width: 70px; height: 85px; cursor: pointer; transform-origin: bottom center; transition: filter 0.3s; }
+        .caishen-idle { animation: sway 3s infinite ease-in-out; }
+        .caishen-laugh { animation: shake 0.5s infinite; filter: drop-shadow(0 0 20px #ecc94b) drop-shadow(0 0 40px #f6e05e); }
+        .caishen-bubble { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #c53030; color: #fed7d7; padding: 8px 12px; border-radius: 12px; border: 2px solid #f6e05e; font-size: 13px; font-weight: bold; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 1001; }
+        .caishen-bubble::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -6px; border-width: 6px; border-style: solid; border-color: #c53030 transparent transparent transparent; }
+        .caishen-bubble.show { opacity: 1; animation: popUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes sway { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg) translateY(-3px); } }
+        @keyframes shake { 0%, 100% { transform: translateX(0) scale(1.05); } 25% { transform: translateX(-3px) scale(1.05); } 75% { transform: translateX(3px) scale(1.05); } }
+        @keyframes popUp { 0% { transform: translate(-50%, 10px) scale(0.8); } 100% { transform: translate(-50%, 0) scale(1); } }
+
+        /* ====== 手機版專屬 UI 元件 ====== */
+        .mobile-menu-btn { display: none; position: absolute; top: 15px; right: 15px; z-index: 2000; background: #2b6cb0 !important; color: white !important; border: none; padding: 8px 15px; font-size: 20px; border-radius: 8px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2); opacity: 1 !important; }
+        .mobile-menu-btn:active, .mobile-menu-btn:focus, .mobile-menu-btn:visited { background: #2b6cb0 !important; color: white !important; opacity: 1 !important; }
+        
+        .mobile-calendar-btn { display: none; position: absolute; top: 15px; right: 95px; z-index: 2000; background: #2b6cb0; color: white; border: none; padding: 8px 12px; font-size: 18px; border-radius: 8px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+
+        .mobile-boss-toggle { display: none; width: 100%; padding: 12px; background: #edf2f7; border: 1px solid #cbd5e0; border-radius: 8px; margin-bottom: 15px; font-weight: bold; color: #2b6cb0; cursor: pointer; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+
+        @media (max-width: 768px) {
+            .desktop-toggle-btn, .desktop-calendar-btn { display: none; }
+            .mobile-menu-btn { display: block; }
+            .mobile-calendar-btn { display: block; }
+            #sidebar { z-index: 2100; }
+            .top-menu { display: none; flex-direction: column; position: fixed; top: 0; right: 0; width: 220px; height: 100vh; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(5px); z-index: 1999; padding: 50px 15px 15px 15px; box-shadow: -5px 0 15px rgba(0,0,0,0.2); overflow-y: auto; align-items: stretch; border-radius: 0; width: 240px; }
+            .top-menu.active { display: flex; animation: none; }
+            .menu-group-main button, .menu-group-data button { padding: 8px 10px !important; font-size: 13px !important; }
+            .menu-group-main, .menu-group-data { flex-direction: column; align-items: stretch; gap: 6px; width: 100%; }
+            .menu-group-data > div { flex-direction: column; gap: 6px; }
+            .menu-group-data { background: transparent; box-shadow: none; padding: 0; }
+            .modal { width: 92% !important; padding: 18px !important; max-height: 85vh; }
+            .modal h2 { font-size: 18px; margin-bottom: 12px; }
+            input, select, textarea, button { font-size: 14px !important; }
+            table th, table td { font-size: 12px; padding: 6px; }
+
+            #timelineModalContainer { height: 92vh !important; max-height: 92vh !important; overflow-y: auto !important; display: block !important; }
+            #timelineModalContainer > div { display: block !important; }
+            .mobile-boss-toggle { display: block; }
+            #bossAttributesPanel { width: 100% !important; border-right: none !important; border-bottom: 2px solid var(--border); padding-right: 0 !important; padding-bottom: 15px; margin-bottom: 15px; display: none; overflow-y: visible !important; }
+            #bossAttributesPanel.active { display: block !important; }
+            #timelineRightPanel { min-width: auto !important; width: 100% !important; overflow: visible !important; display: block !important; }
+            #bossPhotoContainer { margin: 0 auto 15px auto !important; }
+            .timeline-container { overflow-y: visible !important; height: auto !important; }
+
+            #customerQuotesModal > .modal > div { flex-direction: column; }
+            #quotesLeftPanel { min-width: auto !important; width: 100%; }
+            #quotesModalContainer { width: 92% !important; position: relative; overflow-y: auto !important; overflow-x: hidden; padding: 15px !important;}
+            #quotesRightPanel { position: absolute; top: 0; left: 0; width: 100% !important; min-height: 100%; height: auto; background: white; z-index: 10; border-left: none !important; padding: 15px !important; box-sizing: border-box; flex-direction: column; }
+            
+            .calendar-grid { gap: 2px; }
+            .calendar-day { min-height: 0; aspect-ratio: 1; padding: 2px; overflow: hidden; justify-content: flex-start; }
+            .calendar-header-day { font-size: 11px; padding: 5px 0; }
+            .calendar-date { font-size: 10px; margin-bottom: 1px; }
+            .calendar-event { font-size: 9px; padding: 2px; margin-bottom: 2px; line-height: 1.1; }
+
+            /* 便利貼防誤觸：初始無法輸入 */
+            .sticky-note textarea { pointer-events: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="globalTooltip" style="display:none; position:fixed; background:rgba(26, 32, 44, 0.95); color:white; padding:12px; border-radius:8px; font-size:13px; z-index:9999; max-width:320px; white-space:pre-wrap; box-shadow:0 4px 15px rgba(0,0,0,0.3); border:1px solid #4a5568; line-height:1.5;"></div>
+
+    <div id="imageZoomModal" onclick="closeImageZoom()">
+        <img id="zoomedImage" src="" alt="放大檢視">
+    </div>
+
+    <div class="header">
+        <h1>汶記Super Map</h1>
+        <div class="version">v.1.4.1 (UI 優化版)</div>
+    </div>
+
+    <div id="caishenContainer" class="caishen-idle" onclick="triggerCaishen()">
+        <div id="caishenBubble" class="caishen-bubble"></div>
+        <svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:100%; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3));">
+            <path d="M15 110 Q50 65 85 110" fill="#E53E3E" stroke="#9B2C2C" stroke-width="2"/>
+            <path d="M40 110 L60 110 L55 75 L45 75 Z" fill="#9B2C2C" opacity="0.3"/> 
+            <circle cx="50" cy="45" r="23" fill="#FBD38D" stroke="#D69E2E" stroke-width="1"/>
+            <circle cx="35" cy="48" r="4" fill="#FC8181" opacity="0.6"/>
+            <circle cx="65" cy="48" r="4" fill="#FC8181" opacity="0.6"/>
+            <path d="M32 40 Q37 35 42 40" fill="none" stroke="#2D3748" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M58 40 Q63 35 68 40" fill="none" stroke="#2D3748" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M42 52 Q50 62 58 52" fill="none" stroke="#C53030" stroke-width="3" stroke-linecap="round"/>
+            <path d="M35 55 Q50 85 65 55 Q50 65 35 55 Z" fill="#2D3748"/>
+            <path d="M28 50 Q30 70 38 58 Z" fill="#2D3748"/>
+            <path d="M72 50 Q70 70 62 58 Z" fill="#2D3748"/>
+            <path d="M25 15 L75 15 L70 25 L30 25 Z" fill="#1A202C"/>
+            <rect x="22" y="22" width="56" height="8" rx="2" fill="#E53E3E"/> 
+            <circle cx="50" cy="18" r="5" fill="#ECC94B"/> 
+            <rect x="5" y="18" width="22" height="6" rx="3" fill="#1A202C"/>
+            <rect x="73" y="18" width="22" height="6" rx="3" fill="#1A202C"/>
+            <circle cx="35" cy="85" r="6" fill="#FBD38D"/> 
+            <circle cx="65" cy="85" r="6" fill="#FBD38D"/> 
+            <path d="M32 88 Q50 102 68 88 L72 75 Q50 85 28 75 Z" fill="#ECC94B" stroke="#B7791F" stroke-width="1.5"/>
+            <path d="M40 85 Q50 92 60 85" fill="none" stroke="#FEFCBF" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+        </svg>
+    </div>
+
+    <button class="desktop-calendar-btn" onclick="openCalendarModal()" title="開啟洽談月曆">📅</button>
+    <button class="mobile-calendar-btn" onclick="openCalendarModal()" title="開啟洽談月曆">📅</button>
+    <button class="desktop-toggle-btn" id="desktopToggleBtn" onclick="toggleTopMenu()">⚙️ 工具選單 ▼</button>
+    <button class="mobile-menu-btn" onclick="toggleTopMenu()">☰ 選單</button>
+
+    <div class="top-menu" id="topMenu">
+        <div class="menu-group-main">
+            <button onclick="openModal('catalogModal')" style="background:#9f7aea; color:white; border: 2px solid white; box-shadow: 0 4px 8px rgba(0,0,0,0.15);">📚 商品型錄</button>
+            <button onclick="openModal('customerModal')" class="btn-primary">📍 新增客戶</button>
+            <button onclick="toggleSidebar();">📋 客戶清單</button>
+            <button onclick="openModal('productModal')">📦 商品管理工具</button>
+            <button onclick="openModal('selectTalkModal')">💬 洽談生意紀錄</button>
+            <button onclick="openDashboard()" style="background:#ed8936; color:white; border: 2px solid white; box-shadow: 0 4px 8px rgba(0,0,0,0.15);">📊 AI 智慧戰情大看板</button>
+        </div>
+        <div class="menu-group-data">
+            <div>
+                <button onclick="exportData()" style="background:#48bb78; color:white;">💾 備份匯出</button>
+                <input type="file" id="importFile" style="display:none;" onchange="importData(event)" accept=".json">
+                <button onclick="document.getElementById('importFile').click()" style="background:#ecc94b; color:#2d3748;">📂 還原匯入</button>
+            </div>
+            <button onclick="openTrashModal()" style="background:#4a5568; color:white; width:100%;">🗑️ 歷史回收桶</button>
+        </div>
+    </div>
+
+    <div id="calendarModal" class="modal-overlay">
+        <div class="modal" style="width: 800px; max-width: 95%;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h2 style="margin:0; border:none; padding:0;">📅 洽談生意月曆</h2>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button onclick="changeCalendarMonth(-1)" style="padding:5px 10px; background:rgba(255,255,255,0.8); color:#2d3748; font-weight:bold;">◀ 上個月</button>
+                    <span id="calendarMonthYear" style="font-weight:bold; font-size:16px; color:#2b6cb0;"></span>
+                    <button onclick="changeCalendarMonth(1)" style="padding:5px 10px; background:rgba(255,255,255,0.8); color:#2d3748; font-weight:bold;">下個月 ▶</button>
+                </div>
+            </div>
+            <p style="font-size:11px; color:#ffffff; margin-top:-10px; margin-bottom:10px; display:block;">提示：手機版若內容過長，可長按紀錄框進行摘要預覽。</p>
+            <div class="calendar-grid">
+                <div class="calendar-header-day">日</div><div class="calendar-header-day">一</div><div class="calendar-header-day">二</div><div class="calendar-header-day">三</div>
+                <div class="calendar-header-day">四</div><div class="calendar-header-day">五</div><div class="calendar-header-day">六</div>
+            </div>
+            <div id="calendarDays" class="calendar-grid"></div>
+            <div class="form-actions"><button onclick="closeModal('calendarModal')">關閉月曆</button></div>
+        </div>
+    </div>
+
+    <div class="quick-zoom">
+        <select id="regionSelect" onchange="zoomToRegion(this.value)">
+            <option value="">-- 快速縮放至縣市 --</option>
+            <option value="pingtung">屏東縣</option>
+            <option value="kaohsiung">高雄市</option>
+            <option value="tainan">台南市</option>
+            <option value="taichung">台中市</option>
+            <option value="taipei">台北市</option>
+            <option value="taiwan">全台灣視角</option>
+        </select>
+    </div>
+
+    <div id="map"></div>
+
+    <div id="dashboardModal" class="modal-overlay" style="z-index: 3000;">
+        <div class="modal" style="width: 650px; max-width: 95%;">
+            <button class="close-icon-btn" onclick="closeModal('dashboardModal')">✕</button>
+            <h2>📊 AI 智慧戰情大看板</h2>
+            <div id="dashboardContent" style="overflow-y: auto; padding-right: 5px;"></div>
+        </div>
+    </div>
+
+    <div id="trashModal" class="modal-overlay" style="z-index: 3000;">
+        <div class="modal" style="width: 650px; max-width: 95%;">
+            <h2>🗑️ 歷史回收桶 (安全防錯機制)</h2>
+            <div style="display:flex; gap:8px; margin-bottom:15px; flex-wrap:wrap;">
+                <button onclick="switchTrashTab('customers')" id="tabBtn_customers" class="btn-primary" style="padding:6px 12px; font-size:13px;">已刪客戶</button>
+                <button onclick="switchTrashTab('products')" id="tabBtn_products" style="padding:6px 12px; font-size:13px;">已刪商品</button>
+                <button onclick="switchTrashTab('records')" id="tabBtn_records" style="padding:6px 12px; font-size:13px;">已刪洽談紀錄</button>
+                <button onclick="switchTrashTab('regions')" id="tabBtn_regions" style="padding:6px 12px; font-size:13px; background:#ecc94b; color:#2d3748;">已刪區域</button>
+                <button onclick="switchTrashTab('categories')" id="tabBtn_categories" style="padding:6px 12px; font-size:13px; background:#ecc94b; color:#2d3748;">已刪分類</button>
+                <button onclick="switchTrashTab('brands')" id="tabBtn_brands" style="padding:6px 12px; font-size:13px; background:#ecc94b; color:#2d3748;">已刪品牌</button>
+            </div>
+            <div id="trashContentContainer" style="max-height: 45vh; overflow-y: auto;"></div>
+            <div class="form-actions">
+                <button onclick="emptyTrash()" class="btn-danger" style="padding:8px 12px; font-size:13px; background:#c53030; float:left;">全部清空 (不可逆)</button>
+                <button onclick="closeModal('trashModal')">關閉</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="customerModal" class="modal-overlay">
+        <div class="modal">
+            <h2 id="customerModalTitle">新增客戶</h2>
+            <p style="font-size:12px; color:#e53e3e; margin-bottom:15px;">輸入地址後系統會自動定位，若位置有偏差，可於地圖上直接拖曳標記修改。</p>
+            <div class="form-group">
+                <label>區域</label>
+                <div style="display:flex; gap:8px;">
+                    <select id="customerRegion" style="flex:1;"></select>
+                    <button type="button" onclick="openModal('regionManageModal')" style="padding:0 12px; background:#e2e8f0; color:#2d3748; font-size:13px;">⚙️ 編輯區域</button>
+                </div>
+            </div>
+            <div class="form-group"><label>交涉狀態</label><select id="customerStatus"><option value="已成交">已成交</option><option value="開發中">開發中</option></select></div>
+            <div class="form-group"><label>廠商店名</label><input type="text" id="storeName"></div>
+            <div class="form-group"><label>老闆姓名</label><input type="text" id="bossName"></div>
+            <div class="form-group"><label>市話</label><input type="text" id="landline"></div>
+            <div class="form-group"><label>手機</label><input type="text" id="mobile"></div>
+            <div class="form-group"><label>地址</label><input type="text" id="address"></div>
+            <div class="form-group"><label>備註</label><textarea id="customerNote" rows="4" placeholder="請輸入備註內容..."></textarea></div>
+            <input type="hidden" id="editCustomerId">
+            <div class="form-actions" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
+                <button type="button" class="btn-danger" id="deleteCustomerBtn" style="display:none; padding:8px 12px; font-size:14px;" onclick="deleteCustomerFromModal()">🗑️ 刪除客戶</button>
+                <div style="display:flex; gap:10px; margin-left:auto;">
+                    <button type="button" onclick="closeModal('customerModal')">取消</button>
+                    <button type="button" class="btn-primary" id="saveCustomerBtn" onclick="saveCustomer()">新增客戶</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="regionManageModal" class="modal-overlay" style="z-index: 2600;">
+        <div class="modal" style="width: 400px;">
+            <h2>⚙️ 編輯區域列表</h2>
+            <div style="display:flex; gap:8px; margin-bottom:15px;">
+                <input type="text" id="newRegionName" placeholder="輸入新區域名稱..." style="flex:1;">
+                <button type="button" class="btn-primary" onclick="addRegion()">新增</button>
+            </div>
+            <table style="width:100%; border-collapse:collapse;">
+                <thead><tr><th>區域名稱</th><th style="width: 120px;">操作</th></tr></thead>
+                <tbody id="regionTableBody"></tbody>
+            </table>
+            <div class="form-actions"><button type="button" onclick="closeModal('regionManageModal')">完成</button></div>
+        </div>
+    </div>
+
+    <div id="brandCatManageModal" class="modal-overlay" style="z-index: 2600;">
+        <div class="modal" style="width: 550px;">
+            <h2>⚙️ 編輯品牌與分類</h2>
+            <div style="display:flex; gap:20px;">
+                <div style="flex:1;">
+                    <h3 style="font-size:15px; color:#2b6cb0; margin-bottom:10px;">📦 分類管理</h3>
+                    <div style="display:flex; gap:5px; margin-bottom:10px;">
+                        <input type="text" id="newCategoryName" placeholder="新分類..." style="flex:1; padding:6px; font-size:13px;">
+                        <button type="button" class="btn-primary" onclick="addCategory()" style="padding:6px 10px; font-size:13px;">新增</button>
+                    </div>
+                    <div style="max-height:300px; overflow-y:auto;">
+                        <table style="width:100%;">
+                            <tbody id="categoryTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div style="flex:1; border-left:1px solid #e2e8f0; padding-left:20px;">
+                    <h3 style="font-size:15px; color:#dd6b20; margin-bottom:10px;">🏷️ 品牌管理</h3>
+                    <div style="display:flex; gap:5px; margin-bottom:10px;">
+                        <input type="text" id="newBrandName" placeholder="新品牌..." style="flex:1; padding:6px; font-size:13px;">
+                        <button type="button" style="background:#ed8936; color:white; padding:6px 10px; font-size:13px;" onclick="addBrand()">新增</button>
+                    </div>
+                    <div style="max-height:300px; overflow-y:auto;">
+                        <table style="width:100%;">
+                            <tbody id="brandTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="form-actions"><button type="button" onclick="closeModal('brandCatManageModal')">完成</button></div>
+        </div>
+    </div>
+
+    <div id="callModal" class="modal-overlay" style="z-index: 3500;">
+        <div class="modal" style="width: 320px; text-align: center; padding: 25px;">
+            <h3 style="margin-top: 0; color: #2d3748;">📞 選擇撥打方式</h3>
+            <p style="font-size: 14px; color: #718096; margin-bottom: 20px;">請選擇您要撥打的號碼類型：</p>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <button id="btnCallMobile" class="btn-primary" style="padding: 12px; font-size: 16px;">📱 打手機</button>
+                <button id="btnCallLandline" class="btn-primary" style="background: #ed8936; padding: 12px; font-size: 16px;">☎️ 打市話</button>
+                <button type="button" onclick="closeModal('callModal')" style="padding: 10px; font-size: 14px; margin-top: 10px; background: #e2e8f0; color: #4a5568;">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="sidebar">
+        <div class="sidebar-header">
+            <button onclick="toggleSidebar()" style="padding: 5px 10px; font-weight: bold; background-color: #e2e8f0;">X</button>
+            <h2>客戶清單</h2>
+        </div>
+        <div class="form-group" style="padding: 0 2px 5px 2px; margin-bottom: 5px;">
+            <label style="color:#2b6cb0; font-size:14px; font-weight:bold;">🔍 關鍵字搜尋客戶：</label>
+            <input type="text" id="sidebarSearch" oninput="renderSidebar()" placeholder="輸入店名、老闆姓名搜尋..." style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px;">
+        </div>
+        <div class="form-group" style="padding: 0 2px 12px 2px; border-bottom: 1px solid var(--border); margin-bottom: 15px;">
+            <label style="color:#2b6cb0; font-size:14px; font-weight:bold;">📍 按區域篩選名單：</label>
+            <select id="sidebarRegionFilter" onchange="sidebarSingleCustomerFilter=null; renderSidebar()" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px; background:#fffaf0;"></select>
+        </div>
+        <div id="customerListContainer"></div>
+    </div>
+
+    <div id="productModal" class="modal-overlay">
+        <div class="modal" style="width: 760px; overflow: hidden; display: flex; flex-direction: column; padding: 25px;">
+            <button class="close-icon-btn" onclick="closeModal('productModal')">✕</button>
+            <div style="flex-shrink: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-right: 30px; flex-wrap: wrap; gap: 10px;">
+                    <h2 style="margin: 0; border: none; padding: 0;">商品管理工具</h2>
+                    <div style="display:flex; gap:10px;">
+                        <button type="button" style="background:#e2e8f0; color:#2d3748; padding:8px 12px; font-size:14px;" onclick="openModal('brandCatManageModal')">⚙️ 編輯品牌分類</button>
+                        <button class="btn-primary" onclick="openModal('addProductModal')" style="padding:8px 15px;">+ 新增品項</button>
+                    </div>
+                </div>
+                <div class="form-group" style="background: #edf2f7; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
+                    <label style="color:#2b6cb0; font-size:14px; font-weight:bold;">🔍 關鍵字搜尋商品：</label>
+                    <input type="text" id="productSearch" oninput="renderProducts()" placeholder="輸入商品名稱快速搜尋..." style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px; margin-bottom:10px;">
+                    
+                    <div style="display:flex; gap:10px;">
+                        <div style="flex:1;">
+                            <label style="color:#2b6cb0; font-size:14px; font-weight:bold;">📦 按商品分類篩選：</label>
+                            <select id="productTypeFilter" onchange="renderProducts()" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px;"></select>
+                        </div>
+                        <div style="flex:1;">
+                            <label style="color:#2b6cb0; font-size:14px; font-weight:bold;">🏷️ 按品牌篩選：</label>
+                            <select id="productBrandFilter" onchange="renderProducts()" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px;"></select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="flex: 1; overflow-y: auto; padding-right: 5px;">
+                <table style="margin-top: 0;">
+                    <thead><tr><th style="position:sticky; top:0; z-index:2;">品項名稱</th><th style="position:sticky; top:0; z-index:2;">品牌</th><th style="position:sticky; top:0; z-index:2;">分類</th><th style="position:sticky; top:0; z-index:2;">成本價</th><th style="position:sticky; top:0; z-index:2;">定價</th><th style="position:sticky; top:0; z-index:2;">毛利 (%)</th><th style="min-width: 80px; text-align:center; position:sticky; top:0; z-index:2;">選項</th></tr></thead>
+                    <tbody id="productTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="selectProductModal" class="modal-overlay" style="z-index: 3600;">
+        <div class="modal" style="width: 650px; overflow: hidden; display: flex; flex-direction: column; padding: 25px;">
+            <button class="close-icon-btn" onclick="closeModal('selectProductModal')">✕</button>
+            <div style="flex-shrink: 0;">
+                <h2 style="margin: 0 0 15px 0;">於商品清單中選取品項</h2>
+                <div class="form-group" style="background: #edf2f7; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
+                    <label style="color:#2b6cb0; font-size:14px; font-weight:bold;">🔍 關鍵字搜尋：</label>
+                    <input type="text" id="selectProductSearch" oninput="renderSelectProductList()" placeholder="輸入商品名稱快速搜尋..." style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px; margin-bottom:10px;">
+                    <div style="display:flex; gap:10px;">
+                        <div style="flex:1;">
+                            <select id="selectProductTypeFilter" onchange="renderSelectProductList()" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold;"></select>
+                        </div>
+                        <div style="flex:1;">
+                            <select id="selectProductBrandFilter" onchange="renderSelectProductList()" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold;"></select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="flex: 1; overflow-y: auto; padding-right: 5px;">
+                <table style="margin-top: 0; width: 100%;">
+                    <thead><tr><th style="position:sticky; top:0; z-index:2;">品項名稱</th><th style="position:sticky; top:0; z-index:2;">品牌</th><th style="position:sticky; top:0; z-index:2;">分類</th><th style="position:sticky; top:0; z-index:2; text-align:center;">操作</th></tr></thead>
+                    <tbody id="selectProductTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="addProductModal" class="modal-overlay" style="z-index: 3100;">
+        <div class="modal">
+            <h2 id="productModalTitle">新增/修改品項</h2>
+            <div class="form-group">
+                <label>上傳商品照片</label>
+                <div style="width: 100%; height: 160px; background: #edf2f7; border: 1px dashed #cbd5e0; border-radius: 6px; position: relative; display: flex; justify-content: center; align-items: center; cursor: pointer; overflow: hidden;" onclick="document.getElementById('prodPhotoUpload').click()">
+                    <span id="prodPhotoPlaceholder" style="color: #a0aec0; font-weight: bold;">+ 點擊上傳圖片</span>
+                    <img id="prodPhotoPreview" src="" style="display: none; max-width: 100%; max-height: 100%; object-fit: contain; pointer-events: none;">
+                </div>
+                <input type="file" id="prodPhotoUpload" style="display:none;" accept="image/*" onchange="handleProductPhotoUpload(event)">
+                <button type="button" onclick="clearProductPhoto()" style="margin-top: 5px; font-size: 11px; padding: 2px 8px; background: #cbd5e0; border: none; border-radius: 4px;">清除圖片</button>
+            </div>
+            <div class="form-group"><label>分類</label><select id="prodType"></select></div>
+            <div class="form-group"><label>品牌</label><select id="prodBrand"></select></div>
+            <div class="form-group"><label>品項名稱</label><input type="text" id="prodName"></div>
+            <div class="form-group"><label>商品描述</label><textarea id="prodDesc" rows="3" placeholder="輸入商品特色、規格等描述..."></textarea></div>
+            <div class="form-group"><label>成本價</label><input type="number" id="prodCost" oninput="calcProfit()"></div>
+            <div class="form-group"><label>定價</label><input type="number" id="prodPrice" oninput="calcProfit()"></div>
+            <div class="form-group"><label>毛利 (%) (自動計算)</label><input type="text" id="prodProfit" readonly style="background:#edf2f7;"></div>
+            <input type="hidden" id="editProductId">
+            <div class="form-actions"><button onclick="closeModal('addProductModal')">取消</button><button class="btn-primary" onclick="saveProduct()">儲存</button></div>
+        </div>
+    </div>
+
+    <div id="productPreviewModal" class="modal-overlay" style="z-index: 3200;">
+        <div class="modal" style="width: 400px; padding: 20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom: 2px solid var(--border); padding-bottom:8px;">
+                <h3 style="margin:0; color:#2b6cb0;">🔍 商品預覽</h3>
+                <button onclick="closeModal('productPreviewModal')" style="padding:2px 8px; font-size:14px; background:transparent; border:none; font-weight:bold; cursor:pointer;">✕</button>
+            </div>
+            <div id="previewCardContent"></div>
+            <div class="form-actions" style="margin-top: 15px;"><button class="btn-primary" onclick="closeModal('productPreviewModal')" style="width: 100%;">確認</button></div>
+        </div>
+    </div>
+
+    <div id="catalogModal" class="modal-overlay">
+        <div class="modal" style="width: 600px; overflow: hidden; display: flex; flex-direction: column; padding: 25px;">
+            <button class="close-icon-btn" onclick="closeModal('catalogModal')">✕</button>
+            <div style="flex-shrink: 0;">
+                <h2 style="margin-top: 0; padding-right: 30px;">📚 商品型錄展示</h2>
+                <p style="font-size:12px; color:#718096; margin-top:-15px; margin-bottom:15px;">此模式隱藏了定價、成本與毛利，您可以安心將畫面展示給客戶觀看商品與介紹。</p>
+                <div class="form-group" style="background: #edf2f7; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
+                    <label style="color:#dd6b20; font-size:14px; font-weight:bold;">🔍 關鍵字搜尋商品：</label>
+                    <input type="text" id="catalogSearch" oninput="renderCatalog()" placeholder="輸入商品名稱快速搜尋..." style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px; margin-bottom:10px;">
+                    
+                    <div style="display:flex; gap:10px;">
+                        <div style="flex:1;"><label style="color:#dd6b20; font-size:14px; font-weight:bold;">📦 按分類篩選：</label><select id="catalogTypeFilter" onchange="renderCatalog()" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px;"></select></div>
+                        <div style="flex:1;"><label style="color:#dd6b20; font-size:14px; font-weight:bold;">🏷️ 按品牌篩選：</label><select id="catalogBrandFilter" onchange="renderCatalog()" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px;"></select></div>
+                    </div>
+                </div>
+            </div>
+            <div style="flex: 1; overflow-y: auto; padding-right: 5px;">
+                <table style="margin-top: 0;">
+                    <thead><tr><th style="position:sticky; top:0; z-index:2;">品項名稱 (點擊看詳情)</th><th style="position:sticky; top:0; z-index:2;">品牌</th><th style="position:sticky; top:0; z-index:2;">分類</th></tr></thead>
+                    <tbody id="catalogTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="selectTalkModal" class="modal-overlay">
+        <div class="modal" style="width: 480px; padding: 25px;">
+            <button class="close-icon-btn" onclick="closeModal('selectTalkModal')">✕</button>
+            <h2 style="margin-top:0;">選擇洽談客戶</h2>
+            
+            <div style="margin-bottom: 15px; border-bottom: 1px dashed var(--border); padding-bottom: 15px;">
+                <h3 style="margin:0 0 10px 0; color:#dd6b20; font-size:14px; display:flex; align-items:center;">✨ 近期洽談動態</h3>
+                <div style="position: relative; padding: 5px 0;">
+                    <div class="recent-arrow-bg"><span class="flash-new">最新</span></div>
+                    <div id="recentTalksContainer" class="recent-bubble-wrapper" style="position: relative; z-index: 1;"></div>
+                </div>
+            </div>
+
+            <div class="form-group" style="padding: 0; margin-bottom: 10px;">
+                <label style="color:#2b6cb0; font-size:14px; font-weight:bold;">🔍 關鍵字搜尋客戶：</label>
+                <input type="text" id="talkSearch" oninput="renderTalkCustomerList()" placeholder="輸入店名、老闆姓名搜尋..." style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px;">
+            </div>
+            <div class="form-group" style="background: #edf2f7; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
+                <label style="color:#2b6cb0; font-size:14px; font-weight:bold;">📍 按區域篩選名單：</label>
+                <select id="talkRegionFilter" onchange="renderTalkCustomerList()" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px; background:#fffaf0;"></select>
+            </div>
+            <div id="talkCustomerList" style="display:flex; flex-direction:column; gap:10px; max-height: 35vh; overflow-y: auto;"></div>
+        </div>
+    </div>
+
+    <div id="customerQuotesModal" class="modal-overlay" style="z-index: 3600;">
+        <div class="modal" id="quotesModalContainer" style="width: 440px; max-width: 95%; transition: width 0.3s ease; padding: 25px;">
+            <button class="close-icon-btn" onclick="closeModal('customerQuotesModal')">✕</button>
+            <div style="display: flex; gap: 20px;">
+                <div id="quotesLeftPanel" style="flex: 1; min-width: 390px;">
+                    <h2 id="customerQuotesTitle" style="margin-top:0;">專屬商品報價單</h2>
+                    <p style="font-size: 12px; color:#718096; margin-bottom:15px;">* 系統已自動精準加總該客戶歷次談判之所有漲跌紀錄。</p>
+                    <div class="form-group" style="background: #edf2f7; padding: 12px; border-radius: 6px; margin-bottom:15px;">
+                        <label style="color:#2b6cb0; font-size:14px; font-weight:bold;">🔍 關鍵字搜尋商品：</label>
+                        <input type="text" id="quoteProductSearch" oninput="filterQuoteProductOptions()" placeholder="輸入商品名稱搜尋..." style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px; margin-bottom:10px;">
+                        <label style="color:#2b6cb0; font-size:14px; font-weight:bold;">📦 所有建檔商品項目：</label>
+                        <select id="quoteProductSelect" onchange="renderSingleProductQuote('all')" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px; margin-bottom:12px;"></select>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px; margin-bottom:5px;">
+                            <label style="color:#dd6b20; font-size:14px; font-weight:bold; margin:0;">🤝 曾洽談的品項：</label>
+                            <button type="button" onclick="openMultiQuotePanel()" style="padding: 4px 8px; font-size: 11px; background: #ed8936; color: white; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; transition: 0.2s;">選看多項洽談紀錄</button>
+                        </div>
+                        <select id="quoteHistoryProductSelect" onchange="renderSingleProductQuote('history')" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px; background: #fffaf0;"></select>
+                    </div>
+                    <div id="singleQuoteDisplay"></div>
+                </div>
+                <div id="quotesRightPanel" style="display: none; flex: 1; min-width: 410px; border-left: 1px solid var(--border); padding-left: 20px; position: relative;">
+                    <button type="button" onclick="closeMultiQuotePanel()" style="position: absolute; left: 0; top: 50%; transform: translate(-50%, -50%); padding: 6px 10px; font-size: 12px; font-weight: bold; background: #edf2f7; color: #2d3748; border: 1px solid #cbd5e0; border-radius: 20px; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 20; display: flex; align-items: center; gap: 4px; transition: 0.2s;">⬅️ 收合</button>
+                    
+                    <div style="margin-bottom: 15px; border-bottom: 2px solid var(--border); padding-bottom: 10px;">
+                        <h3 style="margin: 0; color: #2d3748; font-weight: bold;">📋 多品項專屬報價調閱</h3>
+                    </div>
+                    <div id="multiQuoteRowsContainer" style="max-height: 52vh; overflow-y: auto; padding-right: 5px;"></div>
+                    <button type="button" class="btn-primary" onclick="addMultiQuoteRow()" style="width:100%; padding:8px; font-size:12px; background:#3182ce; margin-top:8px;">＋ 添加調閱品項</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="timelineModal" class="modal-overlay" style="z-index: 2600;">
+        <div class="modal" id="timelineModalContainer" style="width: 900px; max-width: 95%; height: 85vh; padding: 25px; display: flex; flex-direction: column; overflow: hidden;">
+            <div style="display: flex; gap: 20px; flex: 1; min-height: 0; overflow: hidden; width: 100%;">
+                <button class="mobile-boss-toggle" onclick="toggleBossPanel(this)">查看老闆屬性與策略筆記 ▼</button>
+                <div id="bossAttributesPanel" style="width: 300px; border-right: 2px solid var(--border); padding-right: 20px; flex-shrink: 0; overflow-y: auto;">
+                    <h3 style="margin-top:0; color:#2d3748; display:flex; align-items:center; gap:6px;">👤 老闆屬性與策略筆記</h3>
+                    <div id="bossInfoText" style="font-size:13px; margin-bottom:10px; color:#4a5568; line-height:1.5;"></div>
+                    
+                    <div style="font-size:12px; font-weight:bold; color:#dd6b20; margin-bottom:5px;">📸 這位老闆 (可上傳名片或合照)：</div>
+                    <div id="bossPhotoContainer" style="width:268px; height:288px; background:#edf2f7; border:1px solid #cbd5e0; border-radius:8px; position:relative; overflow:hidden; margin-bottom:15px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);">
+                        <svg id="defaultBossSvg" viewBox="0 0 100 100" style="width:100%; height:100%; opacity:0.15; position:absolute; top:0; left:0;">
+                            <circle cx="50" cy="35" r="18" fill="#4A5568"/>
+                            <path d="M20 90 Q50 55 80 90" stroke="#4A5568" stroke-width="12" stroke-linecap="round" fill="none"/>
+                        </svg>
+                        <img id="bossImage" src="" style="width:100%; height:100%; object-fit:cover; display:none; position:absolute; top:0; left:0; pointer-events:none;">
+                        <div id="stickyNotesLayer" style="position:absolute; top:0; left:0; width:100%; height:100%;"></div>
+                        <input type="file" id="bossPhotoUpload" style="display:none;" accept="image/*" onchange="handleBossPhotoUpload(event)">
+                        <button onclick="document.getElementById('bossPhotoUpload').click()" style="position:absolute; bottom:6px; right:6px; padding:4px 8px; font-size:11px; background:rgba(255,255,255,0.85); border:1px solid #a0aec0; border-radius:4px; cursor:pointer; font-weight:bold; box-shadow:0 1px 3px rgba(0,0,0,0.1);">📷 換照片</button>
+                    </div>
+                    
+                    <div id="bossNoteBox" style="display:none; background:rgba(26, 32, 44, 0.95); color:white; padding:12px; border-radius:8px; font-size:13px; margin-bottom:15px; border:1px solid #4a5568; line-height:1.5; text-align:left;"></div>
+
+                    <div style="font-size:12px; font-weight:bold; color:#718096; margin-bottom:8px;">＋ 新增特質便利貼 (長按進入編輯模式)：</div>
+                    <div style="display:flex; gap:12px; margin-bottom: 20px;">
+                        <button onclick="addStickyNote('pink')" style="width:30px; height:30px; background:#fbb6ce; border:2px solid #f687b3; border-radius:4px; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1);" title="粉色便利貼"></button>
+                        <button onclick="addStickyNote('yellow')" style="width:30px; height:30px; background:#fef08a; border:2px solid #f6e05e; border-radius:4px; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1);" title="黃色便利貼"></button>
+                        <button onclick="addStickyNote('green')" style="width:30px; height:30px; background:#9ae6b4; border:2px solid #68d391; border-radius:4px; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1);" title="綠色便利貼"></button>
+                    </div>
+                </div>
+
+                <div id="timelineRightPanel" style="flex: 1; min-width: 400px; display: flex; flex-direction: column; overflow: hidden;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; flex-shrink: 0;">
+                        <h2 id="timelineTitle" style="margin:0; border:none; padding:0;">洽談紀錄</h2>
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn-primary" style="background:#ed8936; border:1px solid #dd6b20; padding: 8px 12px; font-size:13px;" onclick="openCustomerQuotes(currentTalkCustomerId)">💰 報價</button>
+                            <button class="btn-primary" style="background:#4a5568; padding: 8px 12px; font-size:13px;" onclick="jumpToSidebarForCustomer()">🔍 轉跳客戶清單</button>
+                            <button class="btn-primary" style="padding: 8px 12px; font-size:13px;" onclick="openAddRecordModal()">+ 新增紀錄</button>
+                        </div>
+                    </div>
+                    <div class="timeline-container" style="flex:1; overflow-y:auto; padding-right:10px; margin-top:0;">
+                        <div class="timeline-line"></div>
+                        <div id="timelineContent"></div>
+                    </div>
+                    <div class="form-actions" style="margin-top:15px; flex-shrink: 0;">
+                        <button onclick="closeTimelineModal()">返回上一層</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="addRecordModal" class="modal-overlay" style="z-index: 3100;">
+        <div class="modal" style="width: 460px;">
+            <h2 id="recordModalTitle">新增洽談紀錄</h2>
+            <div class="form-group"><label>標題</label><input type="text" id="recTitle"></div>
+            <div class="form-group"><label>日期</label><input type="date" id="recDate"></div>
+            <div class="form-group"><label>洽談屬性 (可複選)</label>
+                <div style="display:flex; gap:15px; margin-top:5px;">
+                    <label><input type="checkbox" id="attrChat"> 聊天</label>
+                    <label><input type="checkbox" id="attrQuote"> 報價</label>
+                </div>
+            </div>
+            <div class="form-group" style="border: 1px dashed #cbd5e0; padding: 12px; border-radius: 6px; background: #fffaf0;">
+                <label style="display: flex; justify-content: space-between; align-items: center; color: #dd6b20; margin-bottom: 8px;">
+                    <span>📊 連動修改商品報價 (支援複數商品)</span>
+                    <button type="button" onclick="toggleQuoteSection()" style="padding: 2px 8px; font-size: 16px; background: #dd6b20; color: white; border-radius: 4px;">＋</button>
+                </label>
+                <div id="quoteSection" style="display:none; margin-top: 10px; border-top: 1px solid #e2e8f0; padding-top: 10px;">
+                    <div id="quoteItemsContainer"></div>
+                    <button type="button" class="btn-primary" onclick="addQuoteRow()" style="width:100%; padding:6px; font-size:12px; background:#dd6b20; margin-top:5px;">＋ 添加報價品項</button>
+                </div>
+            </div>
+            <div class="form-group"><label>洽談內容</label><textarea id="recContent" rows="4"></textarea></div>
+            <div class="form-actions">
+                <button onclick="closeModal('addRecordModal')">取消</button>
+                <button class="btn-primary" id="saveRecordBtn" onclick="saveRecord()">儲存紀錄</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // --- 初始化資料庫 ---
+        let appData = JSON.parse(localStorage.getItem('wenjiData')) || { customers: [], products: [] };
+        if(!appData.trash) appData.trash = { customers: [], products: [], records: [], regions: [], categories: [], brands: [] };
+        if(!appData.trash.regions) appData.trash.regions = [];
+        if(!appData.trash.categories) appData.trash.categories = [];
+        if(!appData.trash.brands) appData.trash.brands = [];
+        
+        // --- 初始化基礎分類/品牌/區域 ---
+        if(!appData.categories) {
+            let existingCats = [...new Set(appData.products.map(p => p.type).filter(Boolean))];
+            appData.categories = existingCats.length > 0 ? existingCats : ['汽車油', '機車油'];
+        }
+        if(!appData.brands) {
+            let existingBrands = [...new Set(appData.products.map(p => p.brand).filter(Boolean))];
+            appData.brands = existingBrands.length > 0 ? existingBrands : ['無品牌'];
+        }
+        if(!appData.regions) {
+            let existingRegions = [...new Set(appData.customers.map(c => c.region).filter(Boolean))];
+            appData.regions = existingRegions.length > 0 ? existingRegions : ['屏東市', '潮州鎮', '東港鎮'];
+        }
+        
+        let map, markers = {};
+        let currentTalkCustomerId = null;
+        let currentQuoteCustomerId = null; 
+        let editRecordIndex = null;
+        let sidebarSingleCustomerFilter = null; 
+        let currentTrashTab = 'customers'; 
+        let currentSelectedScenario = 'scenario1'; 
+        let activeStickyNote = null; 
+        let tempProductPhoto = null; 
+        let calCurrentYear = new Date().getFullYear();
+        let calCurrentMonth = new Date().getMonth();
+        let currentSelectingQuoteRowId = null; // 用於紀錄點擊的是哪一列報價
+
+        const caishenPhrases = [
+            "和氣生財，日進斗金！", "財源廣進，大吉大利！", "金玉滿堂，富貴吉祥！", 
+            "生意興隆，財源滾滾！", "迎春納福，招財進寶！", "八方來財，好運連連！",
+            "財神到，福氣到，金銀財寶滿滿罩！"
+        ];
+
+        // 格式化金錢為千分位
+        function fmtMoney(num) { return Number(num).toLocaleString('en-US'); }
+
+        // 字母數字複合排序
+        function sortProductsAlphaNumeric(productsArray) { return productsArray.sort((a, b) => a.name.localeCompare(b.name, 'en-US', { numeric: true, sensitivity: 'base' })); }
+
+        // --- 地圖初始化 ---
+        map = L.map('map').setView([22.67, 120.48], 11); 
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map);
+
+        const regions = { pingtung: [22.55, 120.54], kaohsiung: [22.62, 120.31], tainan: [22.99, 120.21], taichung: [24.14, 120.68], taipei: [25.03, 121.56], taiwan: [23.69, 120.96] };
+        function zoomToRegion(val) { if(regions[val]) map.flyTo(regions[val], val === 'taiwan' ? 7 : 12); }
+
+        function toggleTopMenu() {
+            let menu = document.getElementById('topMenu'); let btn = document.getElementById('desktopToggleBtn');
+            menu.classList.toggle('active');
+            if (menu.classList.contains('active')) btn.innerHTML = '⚙️ 收合選單 ▲'; else btn.innerHTML = '⚙️ 工具選單 ▼';
+        }
+        function closeTopMenu() {
+            let menu = document.getElementById('topMenu'); let btn = document.getElementById('desktopToggleBtn');
+            if (menu.classList.contains('active')) { menu.classList.remove('active'); btn.innerHTML = '⚙️ 工具選單 ▼'; }
+        }
+
+        function baseOpenModal(id) { 
+            let el = document.getElementById(id); 
+            if (el) {
+                el.style.display = 'flex'; 
+                // 打開視窗時自動將捲軸置頂
+                let modalEl = document.querySelector('#' + id + ' > .modal');
+                if (modalEl) modalEl.scrollTop = 0;
+                
+                // 特殊內部捲動區塊置頂
+                if (id === 'dashboardModal') {
+                    let dashContent = document.getElementById('dashboardContent');
+                    if(dashContent) dashContent.scrollTop = 0;
+                }
+            }
+        }
+
+        function openModal(id) { 
+            baseOpenModal(id);
+            if(id === 'productModal') {
+                if(document.getElementById('productTypeFilter')) document.getElementById('productTypeFilter').value = 'all';
+                if(document.getElementById('productBrandFilter')) document.getElementById('productBrandFilter').value = 'all';
+                if(document.getElementById('productSearch')) document.getElementById('productSearch').value = ''; 
+                renderProducts();
+            }
+            if(id === 'catalogModal') {
+                if(document.getElementById('catalogTypeFilter')) document.getElementById('catalogTypeFilter').value = 'all';
+                if(document.getElementById('catalogBrandFilter')) document.getElementById('catalogBrandFilter').value = 'all';
+                if(document.getElementById('catalogSearch')) document.getElementById('catalogSearch').value = ''; 
+                renderCatalog();
+            }
+            if(id === 'selectTalkModal') {
+                if(document.getElementById('talkSearch')) document.getElementById('talkSearch').value = ''; 
+                renderRecentTalks();
+                renderTalkCustomerList();
+            }
+            if(id === 'regionManageModal') renderRegionList();
+            if(id === 'brandCatManageModal') { renderCategoryList(); renderBrandList(); }
+        }
+
+        function closeModal(id) { 
+            let el = document.getElementById(id);
+            if(el) el.style.display = 'none'; 
+            if(id === 'customerQuotesModal' && typeof closeMultiQuotePanel === 'function') closeMultiQuotePanel(); 
+            if(id !== 'productPreviewModal' && id !== 'callModal' && id !== 'imageZoomModal' && id !== 'calendarModal' && id !== 'selectProductModal') clearForms(); 
+        }
+
+        function closeTimelineModal() {
+            closeModal('timelineModal');
+            // 若月曆模態框正在開啟中，關閉時間線後就不做跳轉，維持背景月曆；若是獨立開啟則回到選擇面板。
+            if (document.getElementById('calendarModal').style.display === 'flex') { return; }
+            else if (document.getElementById('sidebar').classList.contains('active')) { return; }
+            else { openModal('selectTalkModal'); }
+        }
+
+        // --- 圖片與提示窗 ---
+        function openImageZoom(src) { if(!src) return; document.getElementById('zoomedImage').src = src; document.getElementById('imageZoomModal').style.display = 'flex'; }
+        function closeImageZoom() { document.getElementById('imageZoomModal').style.display = 'none'; }
+        
+        function toggleSidebar() { 
+            let sidebar = document.getElementById('sidebar'); sidebar.classList.toggle('active'); 
+            if (sidebar.classList.contains('active')) document.body.classList.add('sidebar-open'); else document.body.classList.remove('sidebar-open');
+            renderSidebar(); 
+        }
+
+        function clearForms() {
+            ['storeName','bossName','landline','mobile','address','customerNote','editCustomerId',
+             'prodName','prodDesc','prodCost','prodPrice','prodProfit','editProductId',
+             'recTitle','recContent','sidebarSearch','productSearch','catalogSearch','talkSearch','quoteProductSearch',
+             'newRegionName', 'newCategoryName', 'newBrandName'].forEach(id => {
+                let el = document.getElementById(id); if(el) el.value = '';
+            });
+            clearProductPhoto();
+            if(document.getElementById('deleteCustomerBtn')) document.getElementById('deleteCustomerBtn').style.display = 'none';
+            if(document.getElementById('customerStatus')) document.getElementById('customerStatus').value = '開發中';
+            if(document.getElementById('attrChat')) document.getElementById('attrChat').checked = false;
+            if(document.getElementById('attrQuote')) document.getElementById('attrQuote').checked = false;
+            if(document.getElementById('quoteSection')) document.getElementById('quoteSection').style.display = 'none';
+            if(document.getElementById('quoteItemsContainer')) document.getElementById('quoteItemsContainer').innerHTML = '';
+            if(document.getElementById('singleQuoteDisplay')) document.getElementById('singleQuoteDisplay').innerHTML = '';
+            if(document.getElementById('multiQuoteRowsContainer')) document.getElementById('multiQuoteRowsContainer').innerHTML = '';
+            if(document.getElementById('customerModalTitle')) document.getElementById('customerModalTitle').textContent = '新增客戶';
+            if(document.getElementById('saveCustomerBtn')) document.getElementById('saveCustomerBtn').textContent = '新增客戶';
+            if(document.getElementById('recordModalTitle')) document.getElementById('recordModalTitle').textContent = '新增洽談紀錄';
+            if(document.getElementById('saveRecordBtn')) document.getElementById('saveRecordBtn').textContent = '儲存紀錄';
+            if(document.getElementById('productModalTitle')) document.getElementById('productModalTitle').textContent = '新增/修改品項';
+            editRecordIndex = null;
+        }
+        
+        function saveData() { localStorage.setItem('wenjiData', JSON.stringify(appData)); renderMapMarkers(); }
+
+        /* 財神爺互動邏輯 */
+        function triggerCaishen() {
+            let container = document.getElementById('caishenContainer');
+            let bubble = document.getElementById('caishenBubble');
+            container.classList.remove('caishen-idle');
+            container.classList.add('caishen-laugh');
+            let randPhrase = caishenPhrases[Math.floor(Math.random() * caishenPhrases.length)];
+            bubble.innerText = randPhrase;
+            bubble.classList.add('show');
+            setTimeout(() => {
+                container.classList.remove('caishen-laugh');
+                container.classList.add('caishen-idle');
+                bubble.classList.remove('show');
+            }, 3000);
+        }
+
+        // --- 點擊外部關閉 Action Dropdown ---
+        window.onclick = function(event) {
+            if (!event.target.matches('.action-btn-trigger')) {
+                let dropdowns = document.querySelectorAll(".action-menu-content.show");
+                dropdowns.forEach(d => d.classList.remove('show'));
+            }
+        };
+
+        function toggleActionMenu(pId) {
+            let targetId = 'actionMenu_' + pId;
+            document.querySelectorAll('.action-menu-content').forEach(el => {
+                if (el.id !== targetId) el.classList.remove('show');
+            });
+            document.getElementById(targetId).classList.toggle('show');
+        }
+
+        // --- 分類、品牌、區域獨立管理邏輯 ---
+        function updateRegionDatalist() {
+            let select = document.getElementById('customerRegion');
+            let html = appData.regions.map(r => `<option value="${r}">${r}</option>`).join('');
+            if(select) select.innerHTML = html;
+        }
+
+        function renderRegionList() {
+            let html = appData.regions.map((r, idx) => `<tr><td style="font-weight:bold; color:#2b6cb0;">${r}</td><td>
+                <button class="btn-danger" onclick="deleteRegion(${idx})" style="padding:4px 8px; font-size:12px;">🗑️ 刪除</button>
+            </td></tr>`).join('');
+            document.getElementById('regionTableBody').innerHTML = html || '<tr><td colspan="2" style="text-align:center;color:#a0aec0;">尚無自訂區域</td></tr>';
+        }
+        function addRegion() {
+            let val = document.getElementById('newRegionName').value.trim();
+            if(val && !appData.regions.includes(val)) { appData.regions.push(val); saveData(); document.getElementById('newRegionName').value = ''; renderRegionList(); updateRegionDatalist(); updateSidebarFilterOptions(); updateTalkFilterOptions(); }
+            else if(val) alert('此區域已存在！');
+        }
+        function deleteRegion(idx) {
+            let target = appData.regions[idx];
+            appData.trash.regions.push(target); appData.regions.splice(idx, 1); saveData(); renderRegionList(); updateRegionDatalist(); updateSidebarFilterOptions(); updateTalkFilterOptions();
+        }
+
+        function updateCategoryBrandDropdowns() {
+            let catOptions = appData.categories.map(c => `<option value="${c}">${c}</option>`).join('');
+            let catFilterOptions = '<option value="all">-- 顯示所有分類 --</option>' + catOptions;
+            if(document.getElementById('prodType')) document.getElementById('prodType').innerHTML = catOptions;
+            if(document.getElementById('productTypeFilter')) document.getElementById('productTypeFilter').innerHTML = catFilterOptions;
+            if(document.getElementById('catalogTypeFilter')) document.getElementById('catalogTypeFilter').innerHTML = catFilterOptions;
+            if(document.getElementById('selectProductTypeFilter')) document.getElementById('selectProductTypeFilter').innerHTML = catFilterOptions;
+
+            let brandOptions = appData.brands.map(b => `<option value="${b}">${b}</option>`).join('');
+            let brandFilterOptions = '<option value="all">-- 顯示所有品牌 --</option>' + brandOptions;
+            if(document.getElementById('prodBrand')) document.getElementById('prodBrand').innerHTML = brandOptions;
+            if(document.getElementById('productBrandFilter')) document.getElementById('productBrandFilter').innerHTML = brandFilterOptions;
+            if(document.getElementById('catalogBrandFilter')) document.getElementById('catalogBrandFilter').innerHTML = brandFilterOptions;
+            if(document.getElementById('selectProductBrandFilter')) document.getElementById('selectProductBrandFilter').innerHTML = brandFilterOptions;
+        }
+
+        function renderCategoryList() {
+            let html = appData.categories.map((c, idx) => `<tr><td style="font-weight:bold; color:#2b6cb0;">${c}</td><td style="text-align:right;">
+                <button class="btn-danger" onclick="deleteCategory(${idx})" style="padding:2px 6px; font-size:11px;">刪除</button>
+            </td></tr>`).join('');
+            document.getElementById('categoryTableBody').innerHTML = html || '<tr><td colspan="2" style="text-align:center;color:#a0aec0;">無分類</td></tr>';
+        }
+        function addCategory() {
+            let val = document.getElementById('newCategoryName').value.trim();
+            if(val && !appData.categories.includes(val)) { appData.categories.push(val); saveData(); document.getElementById('newCategoryName').value = ''; renderCategoryList(); updateCategoryBrandDropdowns(); }
+            else if(val) alert('此分類已存在！');
+        }
+        function deleteCategory(idx) {
+            let target = appData.categories[idx]; appData.trash.categories.push(target); appData.categories.splice(idx, 1); saveData(); renderCategoryList(); updateCategoryBrandDropdowns();
+        }
+
+        function renderBrandList() {
+            let html = appData.brands.map((b, idx) => `<tr><td style="font-weight:bold; color:#dd6b20;">${b}</td><td style="text-align:right;">
+                <button class="btn-danger" onclick="deleteBrand(${idx})" style="padding:2px 6px; font-size:11px;">刪除</button>
+            </td></tr>`).join('');
+            document.getElementById('brandTableBody').innerHTML = html || '<tr><td colspan="2" style="text-align:center;color:#a0aec0;">無品牌</td></tr>';
+        }
+        function addBrand() {
+            let val = document.getElementById('newBrandName').value.trim();
+            if(val && !appData.brands.includes(val)) { appData.brands.push(val); saveData(); document.getElementById('newBrandName').value = ''; renderBrandList(); updateCategoryBrandDropdowns(); }
+            else if(val) alert('此品牌已存在！');
+        }
+        function deleteBrand(idx) { let target = appData.brands[idx]; appData.trash.brands.push(target); appData.brands.splice(idx, 1); saveData(); renderBrandList(); updateCategoryBrandDropdowns(); }
+
+        /* 歷史回收桶邏輯 */
+        function openTrashModal() { openModal('trashModal'); switchTrashTab(currentTrashTab); }
+        function switchTrashTab(tab) {
+            currentTrashTab = tab;
+            ['customers', 'products', 'records', 'regions', 'categories', 'brands'].forEach(t => { 
+                let btn = document.getElementById('tabBtn_' + t); 
+                if(btn) { if(t === tab) btn.style.border = "2px solid #2d3748"; else btn.style.border = "none"; } 
+            });
+            renderTrashList();
+        }
+        function renderTrashList() {
+            let container = document.getElementById('trashContentContainer'); let html = ''; let list = appData.trash[currentTrashTab] || [];
+            if(list.length === 0) { container.innerHTML = '<p style="text-align:center; color:#a0aec0; padding:20px 0; font-weight:bold;">回收桶空空如也，沒有暫存資料。</p>'; return; }
+            
+            html = `<table style="width:100%; border-collapse:collapse;"><thead><tr><th>刪除項目</th><th>操作</th></tr></thead><tbody>`;
+            list.forEach((item, idx) => {
+                let displayTxt = '';
+                if (currentTrashTab === 'customers') displayTxt = `<b>${item.storeName}</b> (${item.region || '無'})`;
+                else if (currentTrashTab === 'products') displayTxt = `<b>${item.name}</b> (${item.type})`;
+                else if (currentTrashTab === 'records') { let c = appData.customers.find(x => x.id === item.customerId); displayTxt = `[${c ? c.storeName : '原客已刪'}] <b>${item.record.title}</b>`; }
+                else displayTxt = `<b>${item}</b>`;
+
+                let disableRestore = (currentTrashTab === 'records' && !appData.customers.find(c => c.id === item.customerId)) ? `disabled style="background:#cbd5e0;" title="原客已被刪"` : '';
+
+                html += `<tr><td>${displayTxt}</td><td style="white-space:nowrap; width:140px;">
+                    <button onclick="restoreTrash('${currentTrashTab}', ${idx})" style="padding:4px 8px; font-size:12px; background:#48bb78; color:white;" ${disableRestore}>復原</button>
+                    <button onclick="permanentDeleteTrash('${currentTrashTab}', ${idx})" style="padding:4px 8px; font-size:12px; background:#e53e3e; color:white;">永久刪除</button>
+                </td></tr>`;
+            });
+            html += `</tbody></table>`; container.innerHTML = html;
+        }
+
+        function restoreTrash(type, idx) {
+            let item = appData.trash[type].splice(idx, 1)[0];
+            if(type === 'customers') appData.customers.push(item);
+            else if(type === 'products') appData.products.push(item);
+            else if(type === 'regions') { if(!appData.regions.includes(item)) appData.regions.push(item); }
+            else if(type === 'categories') { if(!appData.categories.includes(item)) appData.categories.push(item); }
+            else if(type === 'brands') { if(!appData.brands.includes(item)) appData.brands.push(item); }
+            else if(type === 'records') { let targetCustomer = appData.customers.find(c => c.id === item.customerId); if(targetCustomer) { if(!targetCustomer.records) targetCustomer.records = []; targetCustomer.records.push(item.record); targetCustomer.records.sort((a,b) => new Date(a.date) - new Date(b.date)); } }
+            saveData(); updateRegionDatalist(); updateCategoryBrandDropdowns(); renderSidebar(); renderTrashList(); alert('資料已成功安全復原！');
+        }
+        function permanentDeleteTrash(type, idx) { if(confirm('確定要永久刪除嗎？此操作不可逆！')) { appData.trash[type].splice(idx, 1); saveData(); renderTrashList(); } }
+        function emptyTrash() { if(confirm('警告：確定要清空回收桶嗎？桶內資料將永久抹除！')) { appData.trash = { customers: [], products: [], records: [], regions: [], categories: [], brands: [] }; saveData(); renderTrashList(); } }
+
+        /* 月曆邏輯與長按提示設定 */
+        let calPressTimer;
+        let isCalTooltipOpen = false;
+        
+        function startCalPress(e, title) {
+            if (window.innerWidth > 768) return; // 僅手機版啟用長按觸控浮現檢視
+            let targetEl = e.currentTarget;
+            let rect = targetEl.getBoundingClientRect();
+            calPressTimer = setTimeout(() => {
+                let tooltip = document.getElementById('globalTooltip');
+                tooltip.innerHTML = '📅 <b style="color:#63b3ed;">紀錄摘要預覽：</b><br><br>' + title;
+                tooltip.style.display = 'block';
+                
+                let tooltipWidth = tooltip.offsetWidth;
+                let tooltipHeight = tooltip.offsetHeight;
+                
+                // 定位在點擊元素的正上方，若超出畫面則做限制調整
+                let leftPos = rect.left + (rect.width / 2) - (tooltipWidth / 2);
+                let topPos = rect.top - tooltipHeight - 10;
+                
+                tooltip.style.left = Math.max(10, Math.min(leftPos, window.innerWidth - tooltipWidth - 10)) + 'px';
+                tooltip.style.top = Math.max(10, topPos) + 'px';
+                isCalTooltipOpen = true;
+            }, 500);
+        }
+
+        function cancelCalPress() {
+            clearTimeout(calPressTimer);
+        }
+
+        // 監聽全域事件，點擊空白處關閉提示
+        document.addEventListener('touchstart', function(e) {
+            if (isCalTooltipOpen && !e.target.closest('#globalTooltip') && !e.target.closest('.calendar-event')) {
+                document.getElementById('globalTooltip').style.display = 'none';
+                isCalTooltipOpen = false;
+            }
+        });
+        document.addEventListener('mousedown', function(e) {
+            if (isCalTooltipOpen && !e.target.closest('#globalTooltip') && !e.target.closest('.calendar-event')) {
+                document.getElementById('globalTooltip').style.display = 'none';
+                isCalTooltipOpen = false;
+            }
+        });
+
+        function openCalendarModal() { openModal('calendarModal'); renderCalendar(); }
+        function changeCalendarMonth(offset) {
+            calCurrentMonth += offset;
+            if(calCurrentMonth > 11) { calCurrentMonth = 0; calCurrentYear++; }
+            else if(calCurrentMonth < 0) { calCurrentMonth = 11; calCurrentYear--; }
+            renderCalendar();
+        }
+        function renderCalendar() {
+            let container = document.getElementById('calendarDays'); container.innerHTML = '';
+            document.getElementById('calendarMonthYear').innerText = `${calCurrentYear} 年 ${calCurrentMonth + 1} 月`;
+            
+            let firstDay = new Date(calCurrentYear, calCurrentMonth, 1).getDay();
+            let daysInMonth = new Date(calCurrentYear, calCurrentMonth + 1, 0).getDate();
+            let today = new Date();
+
+            let allRecords = [];
+            appData.customers.forEach(c => {
+                if(c.records) {
+                    c.records.forEach(r => {
+                        let rDate = new Date(r.date);
+                        if(rDate.getFullYear() === calCurrentYear && rDate.getMonth() === calCurrentMonth) {
+                            allRecords.push({ day: rDate.getDate(), title: r.title, customerName: c.storeName, customerId: c.id, colorClass: r.colorClass });
+                        }
+                    });
+                }
+            });
+
+            // Fill blanks before start
+            for(let i = 0; i < firstDay; i++) { container.insertAdjacentHTML('beforeend', `<div class="calendar-day empty"></div>`); }
+
+            // Fill actual days
+            for(let i = 1; i <= daysInMonth; i++) {
+                let isToday = (today.getFullYear() === calCurrentYear && today.getMonth() === calCurrentMonth && today.getDate() === i);
+                let dayHtml = `<div class="calendar-day ${isToday ? 'today' : ''}"><div class="calendar-date">${i}</div>`;
+                
+                let dayRecords = allRecords.filter(r => r.day === i);
+                dayRecords.forEach(dr => {
+                    let bg = dr.colorClass === 'bubble-yellow' ? '#fef08a' : (dr.colorClass === 'bubble-red' ? '#fecaca' : (dr.colorClass === 'bubble-orange' ? '#fed7aa' : '#edf2f7'));
+                    // 加入觸控事件監聽器處理長按
+                    dayHtml += `<div class="calendar-event" style="background:${bg};" onclick="openTimeline('${dr.customerId}')" ontouchstart="startCalPress(event, '${dr.customerName}：${dr.title}')" ontouchend="cancelCalPress()" ontouchmove="cancelCalPress()" title="${dr.customerName}: ${dr.title}"><b>${dr.customerName}</b></div>`;
+                });
+
+                dayHtml += `</div>`; container.insertAdjacentHTML('beforeend', dayHtml);
+            }
+        }
+
+        /* 戰情看板與 AI 邏輯 */
+        function openDashboard() {
+            let total = appData.customers.length; let dealed = appData.customers.filter(c => c.status === '已成交').length; let dev = total - dealed;
+            let dealedPct = total ? Math.round((dealed/total)*100) : 0; let devPct = total ? Math.round((dev/total)*100) : 0;
+            let regionsCount = {}; appData.customers.forEach(c => { let r = c.region || '未設區'; regionsCount[r] = (regionsCount[r] || 0) + 1; });
+            let regionSorted = Object.keys(regionsCount).map(k => ({name: k, count: regionsCount[k]})).sort((a,b) => b.count - a.count);
+            let regionHtml = regionSorted.map(r => { let pct = Math.round((r.count/total)*100); return `<div style="margin-bottom:12px;"><div style="display:flex; justify-content:space-between; font-size:13px; font-weight:bold; margin-bottom:2px;"><span>${r.name}</span><span>${r.count} 家 (${pct}%)</span></div><div class="bar-container"><div class="bar-fill" style="width:${pct}%; background:#ed8936;"></div></div></div>`; }).join('');
+
+            document.getElementById('dashboardContent').innerHTML = `
+                <div style="display:flex; gap:10px; margin-bottom:20px; margin-top:10px;">
+                    <div class="stat-box"><div class="stat-value">${total}</div><div class="stat-label">總客戶數</div></div>
+                    <div class="stat-box"><div class="stat-value" style="color:#48bb78;">${dealed}</div><div class="stat-label">已成交</div></div>
+                    <div class="stat-box"><div class="stat-value" style="color:#3182ce;">${dev}</div><div class="stat-label">開發中</div></div>
+                </div>
+                <div style="margin-bottom:20px;">
+                    <div style="display:flex; height:20px; border-radius:10px; overflow:hidden; background:#cbd5e0;">
+                        <div style="width:${dealedPct}%; background:#48bb78; color:white; font-size:11px; text-align:center; line-height:20px; font-weight:bold;">已成交 ${dealedPct}%</div>
+                        <div style="width:${devPct}%; background:#3182ce; color:white; font-size:11px; text-align:center; line-height:20px; font-weight:bold;">開發中 ${devPct}%</div>
+                    </div>
+                </div>
+                <div style="margin-bottom:25px;"><h3 style="font-size:14px; color:#2d3748; border-bottom:1px solid #e2e8f0; padding-bottom:4px; margin-bottom:8px;">📍 區域客戶分佈</h3>${regionHtml || '<p style="font-size:12px; color:#718096; text-align:center;">尚無區域建檔資料</p>'}</div>
+                <div class="glass-dashboard" style="margin-top:25px;">
+                    <h3 style="margin:0 0 10px 0; color:#dd6b20; font-size:16px; display:flex; align-items:center; gap:6px;">✨ Google Gemini AI 智慧商務顧問</h3>
+                    <div class="form-group">
+                        <label style="color:#4a5568; font-size:13px;">🎯 請選取想要執行的 CRM 大數據分析：</label>
+                        <select id="aiScenarioSelect" style="width:100%; padding:8px; font-weight:bold; border-radius:6px;" onchange="currentSelectedScenario=this.value; document.getElementById('aiReportBlock').innerHTML=''">
+                            <option value="scenario1">🔍 1. RFM 模型分析 (篩選 VIP 與沉睡客)</option>
+                            <option value="scenario2">🎯 2. 精準行銷投遞 (客製化促銷受眾配對)</option>
+                            <option value="scenario3">📊 3. 銷售與客服成效 (跟進紀錄轉化率分析)</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn-primary" style="width:100%; padding:12px; background:linear-gradient(90deg, #ed8936, #dd6b20); border:none; font-size:14px;" onclick="runAiDiagnosis()">啟動 Gemini AI 深度解析</button>
+                    <div id="aiReportBlock" style="margin-top:15px;"></div>
+                </div>
+            `; openModal('dashboardModal');
+        }
+
+        function runAiDiagnosis() {
+            let container = document.getElementById('aiReportBlock');
+            container.innerHTML = `<div style="text-align:center; padding:20px 0; color:#4a5568;"><span style="display:inline-block; animation:pulse-blue 1.5s infinite; font-weight:bold;">🚀 Gemini CRM 演算法正在進行交叉比對...</span></div>`;
+            setTimeout(() => {
+                let htmlReport = "";
+                if(currentSelectedScenario === 'scenario1') {
+                    htmlReport = `<div style="background:white; padding:15px; border-radius:10px; border:1px solid #cbd5e0; font-size:13px; color:#2d3748; line-height:1.6;"><h4 style="margin:0 0 8px 0; color:#2f855a;">💡 RFM 分析結果解讀</h4><p>交叉比對「消費頻率」、「消費金額」與「最近一次消費時間」。系統發現區域內有 15% 的高價值 VIP 客戶貢獻了 60% 利潤，同時有 3 家往來曾達 5 萬以上的客戶已超過 90 天未補貨，即將落入沉睡客區間。</p><h4 style="margin:12px 0 8px 0; color:#c53030;">⚠️ 潛在商務風險</h4><p>沉睡客若徹底流失，該區域的進貨基本盤將產生無法彌補的缺口。</p><h4 style="margin:12px 0 8px 0; color:#2b6cb0;">🎯 行動建議</h4><p>針對該 3 家高危險沉睡客，發起『久違重逢專屬底價特惠』進行喚醒，重新建立報價連結。</p><button type="button" class="btn-primary" style="background:#ed8936; width:100%; margin-top:12px; padding:8px; font-size:12px;" onclick="injectAiCalendar('scenario1')">📅 一鍵排程：沉睡客喚醒拜訪</button></div>`;
+                } else if(currentSelectedScenario === 'scenario2') {
+                    htmlReport = `<div style="background:white; padding:15px; border-radius:10px; border:1px solid #cbd5e0; font-size:13px; color:#2d3748; line-height:1.6;"><h4 style="margin:0 0 8px 0; color:#2f855a;">💡 精準行銷受眾配對</h4><p>透過分析「客戶興趣標籤」與過去的「型錄/產品詢問熱點」，篩選出對 "高階機油" 展現高度興趣但遲未下單的 8 家區域型車廠。</p><h4 style="margin:12px 0 8px 0; color:#2b6cb0;">🎯 行動建議</h4><p>避免無差別發送推銷簡訊。針對這 8 家精準受眾，投遞強調『性能升級與換季保養高毛利』的客製化訊息與體驗包，預計轉換率可大幅提升。</p><button type="button" class="btn-primary" style="background:#ed8936; width:100%; margin-top:12px; padding:8px; font-size:12px;" onclick="injectAiCalendar('scenario2')">📅 一鍵排程：精準行銷樣品投遞</button></div>`;
+                } else {
+                    htmlReport = `<div style="background:white; padding:15px; border-radius:10px; border:1px solid #cbd5e0; font-size:13px; color:#2d3748; line-height:1.6;"><h4 style="margin:0 0 8px 0; color:#2f855a;">💡 銷售劇本與成效追蹤</h4><p>彙整業務「跟進紀錄」與「最終成交率」。數據顯示，若能在初次拜訪後的 72 小時內進行『二次電話跟進並確認庫存消耗』，其最終成交率比一週後才跟進的高出 3.5 倍。</p><h4 style="margin:12px 0 8px 0; color:#2b6cb0;">🎯 行動建議</h4><p>將「72小時黃金跟進期」納入標準銷售 SOP。系統已為您盤點出本週初次拜訪的潛客戶，建議立即進行電話回訪。</p><button type="button" class="btn-primary" style="background:#ed8936; width:100%; margin-top:12px; padding:8px; font-size:12px;" onclick="injectAiCalendar('scenario3')">📅 一鍵排程：72小時黃金回撥清單</button></div>`;
+                } container.innerHTML = htmlReport;
+            }, 1200);
+        }
+
+        function injectAiCalendar(scenario) {
+            if(appData.customers.length === 0) return alert("系統內目前尚無客戶，請先建立至少一位客戶。");
+            let target = appData.customers[0]; if(!target.records) target.records = [];
+            let futureDate = new Date(); futureDate.setDate(futureDate.getDate() + 3); let dateStr = futureDate.toISOString().slice(0,10);
+            let title = "", content = "", colorClass = "bubble-white", quoteChanges = [];
+            if(scenario === 'scenario1') { title = "🎯 【AI排程】RFM沉睡客喚醒計畫"; content = "執行 AI 建議：發起久違重逢底價特惠，重新連結客戶庫存與報價。"; colorClass = "bubble-yellow"; if(appData.products.length > 0) quoteChanges.push({ productId: appData.products[0].id, type: 'decrease', amount: 10 }); } 
+            else if(scenario === 'scenario2') { title = "📦 【AI排程】精準行銷樣品投遞"; content = "執行 AI 建議：針對具備高階機油興趣標籤之客戶，親送體驗包與換季保養企劃。"; colorClass = "bubble-orange"; if(appData.products.length > 0) quoteChanges.push({ productId: appData.products[0].id, type: 'maintain', amount: 0 }); } 
+            else { title = "📞 【AI排程】72小時黃金回撥"; content = "執行 AI 建議：實施 SOP，撥打二次確認電話關心庫存消耗情況，推動成交。"; colorClass = "bubble-white"; }
+            target.records.push({ title, date: dateStr, content, colorClass, attrChat: true, attrQuote: scenario !== 'scenario3', quoteChanges });
+            target.records.sort((a,b) => new Date(a.date) - new Date(b.date)); saveData(); alert(`💡 【AI 整合成功】\n已寫入客戶【${target.storeName}】的未來月曆時間線中！`); closeModal('dashboardModal');
+        }
+
+        // --- 商品管理功能 ---
+        function handleProductPhotoUpload(event) {
+            let file = event.target.files[0]; if(!file) return; let reader = new FileReader();
+            reader.onload = function(e) {
+                let img = new Image(); img.onload = function() {
+                    let canvas = document.createElement('canvas'); let ctx = canvas.getContext('2d');
+                    let maxW = 500, maxH = 500; let width = img.width, height = img.height;
+                    if (width > height) { if (width > maxW) { height *= maxW / width; width = maxW; } } else { if (height > maxH) { width *= maxH / height; height = maxH; } }
+                    canvas.width = width; canvas.height = height; ctx.drawImage(img, 0, 0, width, height);
+                    tempProductPhoto = canvas.toDataURL('image/jpeg', 0.8);
+                    let preview = document.getElementById('prodPhotoPreview'); preview.src = tempProductPhoto; preview.style.display = 'block'; document.getElementById('prodPhotoPlaceholder').style.display = 'none';
+                }; img.src = e.target.result;
+            }; reader.readAsDataURL(file);
+        }
+
+        function clearProductPhoto() {
+            tempProductPhoto = null; let preview = document.getElementById('prodPhotoPreview');
+            preview.src = ''; preview.style.display = 'none'; document.getElementById('prodPhotoPlaceholder').style.display = 'block'; document.getElementById('prodPhotoUpload').value = '';
+        }
+
+        function calcProfit() {
+            let cost = Number(document.getElementById('prodCost').value) || 0; let price = Number(document.getElementById('prodPrice').value) || 0;
+            let profitPercent = price ? (((price - cost) / price) * 100).toFixed(1) : "0.0"; document.getElementById('prodProfit').value = profitPercent + "%";
+        }
+        
+        function saveProduct() {
+            let id = document.getElementById('editProductId').value || Date.now().toString();
+            let product = { 
+                id, type: document.getElementById('prodType').value, brand: document.getElementById('prodBrand').value,
+                name: document.getElementById('prodName').value, description: document.getElementById('prodDesc').value,
+                cost: Number(document.getElementById('prodCost').value), price: Number(document.getElementById('prodPrice').value),
+                photo: tempProductPhoto 
+            };
+            if(!product.name) return alert("請輸入品項名稱");
+            let idx = appData.products.findIndex(p => p.id === id); if (idx > -1) appData.products[idx] = product; else appData.products.push(product);
+            saveData(); closeModal('addProductModal'); renderProducts(); renderCatalog();
+        }
+
+        function copyProduct(id) {
+            let p = appData.products.find(x => x.id === id);
+            if(p) {
+                document.getElementById('editProductId').value = ''; 
+                document.getElementById('prodType').value = p.type;
+                document.getElementById('prodBrand').value = p.brand || (appData.brands[0] || '');
+                document.getElementById('prodName').value = p.name + ' (複製)';
+                document.getElementById('prodDesc').value = p.description || '';
+                document.getElementById('prodCost').value = p.cost; document.getElementById('prodPrice').value = p.price;
+
+                tempProductPhoto = p.photo || null; let preview = document.getElementById('prodPhotoPreview'); let placeholder = document.getElementById('prodPhotoPlaceholder');
+                if(tempProductPhoto) { preview.src = tempProductPhoto; preview.style.display = 'block'; placeholder.style.display = 'none'; } 
+                else { preview.src = ''; preview.style.display = 'none'; placeholder.style.display = 'block'; }
+                calcProfit(); document.getElementById('productModalTitle').textContent = '新增品項 (複製)'; openModal('addProductModal');
+            }
+        }
+        
+        function deleteProduct(id) { let target = appData.products.find(p => p.id === id); if(target) { appData.trash.products.push(target); appData.products = appData.products.filter(p => p.id !== id); saveData(); renderProducts(); alert('品項已移至回收桶。'); } }
+
+        function renderProducts() {
+            let filterType = document.getElementById('productTypeFilter')?.value || 'all';
+            let filterBrand = document.getElementById('productBrandFilter')?.value || 'all';
+            let searchKeyword = document.getElementById('productSearch')?.value.trim().toLowerCase() || '';
+            let htmlStr = ''; let sortedProducts = sortProductsAlphaNumeric([...appData.products]);
+
+            sortedProducts.forEach(p => {
+                if (filterType !== 'all' && p.type !== filterType) return;
+                if (filterBrand !== 'all' && p.brand !== filterBrand) return;
+                if (searchKeyword && !p.name.toLowerCase().includes(searchKeyword)) return;
+                
+                let profitPercent = p.price ? (((p.price - p.cost) / p.price) * 100).toFixed(1) : "0.0";
+                let colorHex = Number(profitPercent) > 0 ? '#48bb78' : '#e53e3e';
+                
+                let actionMenuHtml = `
+                <div style="position:relative; display:inline-block; width:100%; text-align:center;">
+                    <button class="btn-primary action-btn-trigger" style="padding:4px 10px; font-size:12px;" onclick="toggleActionMenu('${p.id}')">動作 ▲</button>
+                    <div id="actionMenu_${p.id}" class="action-menu-content">
+                        <button onclick="editProduct('${p.id}')" style="color:#2b6cb0; font-weight:bold;">✏️ 修改</button>
+                        <button onclick="copyProduct('${p.id}')" style="color:#48bb78; font-weight:bold;">📄 複製</button>
+                        <button onclick="deleteProduct('${p.id}')" style="color:#e53e3e; font-weight:bold;">🗑️ 刪除</button>
+                    </div>
+                </div>`;
+
+                htmlStr += `<tr>
+                    <td><a href="#" onclick="openProductPreview('${p.id}', false); return false;" style="color:#2b6cb0; text-decoration:underline; font-weight:bold;">${p.name}</a></td>
+                    <td>${p.brand || '無'}</td><td>${p.type}</td><td>$${fmtMoney(p.cost)}</td><td>$${fmtMoney(p.price)}</td><td style="color:${colorHex}; font-weight:bold;">${profitPercent}%</td>
+                    <td style="overflow:visible;">${actionMenuHtml}</td>
+                </tr>`;
+            });
+            document.getElementById('productTableBody').innerHTML = htmlStr || '<tr><td colspan="7" style="text-align:center;color:#a0aec0;">找不到符合條件的商品</td></tr>';
+        }
+
+        // --- 全新追加：渲染「在商品清單中選取品項」選單 ---
+        function openSelectProductModal(rowId) {
+            currentSelectingQuoteRowId = rowId;
+            document.getElementById('selectProductSearch').value = '';
+            
+            // 同步目前的篩選下拉清單項目
+            document.getElementById('selectProductTypeFilter').innerHTML = document.getElementById('productTypeFilter').innerHTML;
+            document.getElementById('selectProductBrandFilter').innerHTML = document.getElementById('productBrandFilter').innerHTML;
+            
+            openModal('selectProductModal');
+            renderSelectProductList();
+        }
+
+        function renderSelectProductList() {
+            let filterType = document.getElementById('selectProductTypeFilter')?.value || 'all';
+            let filterBrand = document.getElementById('selectProductBrandFilter')?.value || 'all';
+            let searchKeyword = document.getElementById('selectProductSearch')?.value.trim().toLowerCase() || '';
+            let htmlStr = ''; 
+            let sortedProducts = sortProductsAlphaNumeric([...appData.products]);
+
+            sortedProducts.forEach(p => {
+                if (filterType !== 'all' && p.type !== filterType) return;
+                if (filterBrand !== 'all' && p.brand !== filterBrand) return;
+                if (searchKeyword && !p.name.toLowerCase().includes(searchKeyword)) return;
+                
+                // 為了避免引號跳脫問題，將名字單引號替換掉
+                let safeName = p.name.replace(/'/g, "\\'");
+                
+                htmlStr += `<tr>
+                    <td style="font-weight:bold; color:#2d3748;">${p.name}</td>
+                    <td>${p.brand || '無'}</td><td>${p.type}</td>
+                    <td style="text-align:center;">
+                        <button class="btn-primary" style="padding:4px 12px; font-size:12px; background:#dd6b20;" onclick="selectProductForQuote('${p.id}', '${safeName}')">選取</button>
+                    </td>
+                </tr>`;
+            });
+            document.getElementById('selectProductTableBody').innerHTML = htmlStr || '<tr><td colspan="4" style="text-align:center;color:#a0aec0;">找不到符合條件的商品</td></tr>';
+        }
+
+        function selectProductForQuote(pId, pName) {
+            if(!currentSelectingQuoteRowId) return;
+            let row = document.getElementById(currentSelectingQuoteRowId);
+            if(row) {
+                let hiddenInput = row.querySelector('.row-product-select');
+                hiddenInput.value = pId;
+                let btn = row.querySelector('.product-display-btn');
+                btn.innerHTML = '📦 ' + pName;
+                btn.style.color = '#2d3748';
+                btn.style.background = '#fffaf0';
+                updateQuoteRowInfo(currentSelectingQuoteRowId);
+            }
+            closeModal('selectProductModal');
+        }
+
+        function renderCatalog() {
+            let filterType = document.getElementById('catalogTypeFilter')?.value || 'all'; let filterBrand = document.getElementById('catalogBrandFilter')?.value || 'all'; let searchKeyword = document.getElementById('catalogSearch')?.value.trim().toLowerCase() || '';
+            let htmlStr = ''; let sortedProducts = sortProductsAlphaNumeric([...appData.products]);
+            sortedProducts.forEach(p => {
+                if (filterType !== 'all' && p.type !== filterType) return; if (filterBrand !== 'all' && p.brand !== filterBrand) return; if (searchKeyword && !p.name.toLowerCase().includes(searchKeyword)) return;
+                htmlStr += `<tr><td><a href="#" onclick="openProductPreview('${p.id}', true); return false;" style="color:#2b6cb0; text-decoration:underline; font-weight:bold; font-size:15px;">${p.name}</a></td><td><span style="background:#e2e8f0; padding:2px 6px; border-radius:4px; font-size:11px;">${p.brand || '無'}</span></td><td>${p.type}</td></tr>`;
+            }); document.getElementById('catalogTableBody').innerHTML = htmlStr || '<tr><td colspan="3" style="text-align:center;color:#a0aec0;">找不到符合條件的商品</td></tr>';
+        }
+        
+        function editProduct(id) {
+            let p = appData.products.find(x => x.id === id);
+            if(p) {
+                document.getElementById('editProductId').value = p.id; document.getElementById('prodType').value = p.type; document.getElementById('prodBrand').value = p.brand || (appData.brands[0] || ''); document.getElementById('prodName').value = p.name; document.getElementById('prodDesc').value = p.description || ''; document.getElementById('prodCost').value = p.cost; document.getElementById('prodPrice').value = p.price; 
+                tempProductPhoto = p.photo || null; let preview = document.getElementById('prodPhotoPreview'); let placeholder = document.getElementById('prodPhotoPlaceholder');
+                if(tempProductPhoto) { preview.src = tempProductPhoto; preview.style.display = 'block'; placeholder.style.display = 'none'; } 
+                else { preview.src = ''; preview.style.display = 'none'; placeholder.style.display = 'block'; }
+                calcProfit(); openModal('addProductModal');
+            }
+        }
+
+        function openProductPreview(id, isCatalog) {
+            let p = appData.products.find(x => x.id === id); if(!p) return;
+            let photoHtml = p.photo ? `<div class="preview-img-container" onclick="openImageZoom('${p.photo}')" title="點擊放大檢視"><img src="${p.photo}" alt="${p.name}"></div>` : `<div class="preview-img-container" style="background:#f7fafc; cursor:default;"><span style="color:#a0aec0;">暫無商品圖片</span></div>`;
+            let descHtml = p.description ? `<div style="margin-bottom:15px;"><h4 style="margin:0 0 5px 0; color:#718096; font-size:12px;">商品描述</h4><p style="margin:0; font-size:14px; line-height:1.5; color:#4a5568;">${p.description.replace(/\n/g, '<br>')}</p></div>` : '';
+            let priceSection = '';
+            if (!isCatalog) {
+                let profitPercent = p.price ? (((p.price - p.cost) / p.price) * 100).toFixed(1) : "0.0"; let colorHex = Number(profitPercent) > 0 ? '#48bb78' : '#e53e3e';
+                priceSection = `<div style="background:#edf2f7; border:1px solid #cbd5e0; padding:12px; border-radius:8px;"><div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span style="color:#718096;">定價：</span><span style="font-weight:bold;">$${fmtMoney(p.price)}</span></div><div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span style="color:#718096;">成本：</span><span>$${fmtMoney(p.cost)}</span></div><div style="display:flex; justify-content:space-between; border-top:1px dashed #a0aec0; padding-top:8px; margin-top:4px;"><span style="color:#718096;">毛利：</span><span style="color:${colorHex}; font-weight:bold;">${profitPercent}%</span></div></div>`;
+            }
+            document.getElementById('previewCardContent').innerHTML = `${photoHtml}<div style="margin-bottom:15px;"><span style="display:inline-block; background:#e2e8f0; color:#4a5568; padding:3px 8px; border-radius:4px; font-size:11px; font-weight:bold; margin-bottom:8px;">${p.brand || '無品牌'} | ${p.type}</span><h2 style="margin:0; color:#2d3748; font-size:20px;">${p.name}</h2></div>${descHtml}${priceSection}`;
+            openModal('productPreviewModal');
+        }
+
+        // --- 客戶與報價相關 ---
+        function getNotesHtml(c) {
+            let notesHtml = ''; if (c.note) notesHtml += `<div style="margin-bottom:8px; line-height:1.4;">${c.note.replace(/\n/g, '<br>')}</div>`; let hasSticky = false;
+            if(c.stickyNotes && c.stickyNotes.length > 0) {
+                let stickyHtml = ''; c.stickyNotes.forEach(s => { if(s.text) { stickyHtml += `<div style="color:#fbd38d; margin-bottom:4px;">📌 ${s.text.replace(/\n/g, '<br>')}</div>`; hasSticky = true; } });
+                if (hasSticky) notesHtml += `<div style="color:#f6ad55; font-weight:bold; margin-top:8px; margin-bottom:4px;">💡 策略便利貼：</div>` + stickyHtml;
+            } return notesHtml;
+        }
+
+        function showCardTooltip(cardEl, customerId) {
+            let c = appData.customers.find(x => x.id === customerId); if(!c) return; let notesHtml = getNotesHtml(c); if(!notesHtml) return;
+            let tooltip = document.getElementById('globalTooltip'); tooltip.innerHTML = '📝 <b style="color:#63b3ed;">最新備註內容：</b><br><br>' + notesHtml; tooltip.style.display = 'block';
+            let rect = cardEl.getBoundingClientRect(); let leftPos = rect.left - tooltip.offsetWidth - 15; if (leftPos < 10) leftPos = 10; tooltip.style.left = leftPos + 'px'; tooltip.style.top = rect.top + 'px';
+        }
+        function hideCardTooltip() { document.getElementById('globalTooltip').style.display = 'none'; }
+        function toggleMobileNotes(e, id) { if (window.innerWidth > 768) return; if (e.target.tagName.toLowerCase() === 'button' || e.target.closest('button')) return; let notesDiv = document.getElementById('inline_notes_' + id); if (notesDiv) notesDiv.style.display = (notesDiv.style.display === 'none') ? 'block' : 'none'; }
+
+        async function saveCustomer() {
+            let id = document.getElementById('editCustomerId').value || Date.now().toString(); let existingCustomer = appData.customers.find(c => c.id === id); let rawNote = document.getElementById('customerNote').value.trim();
+            let customer = {
+                id: id, region: document.getElementById('customerRegion').value.trim(), status: document.getElementById('customerStatus').value, 
+                storeName: document.getElementById('storeName').value, bossName: document.getElementById('bossName').value,
+                landline: document.getElementById('landline').value, mobile: document.getElementById('mobile').value,
+                address: document.getElementById('address').value, records: existingCustomer?.records || [],
+                stickyNotes: existingCustomer?.stickyNotes || [], bossPhoto: existingCustomer?.bossPhoto || null
+            };
+            if(!customer.storeName || !customer.address) return alert("廠商店名與地址為必填項目！");
+            if (!existingCustomer) { customer.noteHistory = []; } else { customer.noteHistory = existingCustomer.noteHistory || []; if (existingCustomer.note && customer.noteHistory.length === 0) customer.noteHistory.push({ date: '早期紀錄', text: existingCustomer.note }); }
+            if (rawNote && (customer.noteHistory.length === 0 || customer.noteHistory[customer.noteHistory.length - 1].text !== rawNote)) { customer.noteHistory.push({ date: new Date().toLocaleString('zh-TW', { hour12: false }), text: rawNote }); } customer.note = rawNote;
+
+            try {
+                if (existingCustomer && existingCustomer.address === customer.address && existingCustomer.lat) { 
+                    customer.lat = existingCustomer.lat; customer.lng = existingCustomer.lng; 
+                } else { 
+                    // 擴增備案搜尋邏輯
+                    let searchQueries = [
+                        customer.address,
+                        customer.address.substring(0, 6), // 備案1：前6字元 (通常為縣市區鄉鎮)
+                        document.getElementById('customerRegion').value + '市', // 備案2：依所選區域補上市
+                        document.getElementById('customerRegion').value // 備案3：依所選區域
+                    ];
+                    let found = false;
+                    for (let q of searchQueries) {
+                        if (!q) continue;
+                        let response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=tw&accept-language=zh-TW&limit=1`); 
+                        let resData = await response.json(); 
+                        if (resData.length > 0) { 
+                            customer.lat = parseFloat(resData[0].lat); 
+                            customer.lng = parseFloat(resData[0].lon); 
+                            found = true;
+                            break;
+                        } 
+                    }
+                    if (!found) {
+                        let center = map.getCenter(); customer.lat = center.lat; customer.lng = center.lng; 
+                    }
+                }
+            } catch (e) { let center = map.getCenter(); customer.lat = center.lat; customer.lng = center.lng; }
+
+            let index = appData.customers.findIndex(c => c.id === id); if (index > -1) appData.customers[index] = customer; else appData.customers.push(customer);
+            saveData(); updateRegionDatalist(); closeModal('customerModal'); renderSidebar(); map.flyTo([customer.lat, customer.lng], 16);
+        }
+
+        function deleteCustomer(id) { let target = appData.customers.find(c => c.id === id); if(target) { appData.trash.customers.push(target); appData.customers = appData.customers.filter(c => c.id !== id); if(markers[id]) { map.removeLayer(markers[id]); delete markers[id]; } saveData(); updateRegionDatalist(); renderSidebar(); alert('已移至歷史回收桶。'); } }
+        function deleteCustomerFromModal() { let id = document.getElementById('editCustomerId').value; if(id) { deleteCustomer(id); closeModal('customerModal'); } }
+
+        function promptCall(id) {
+            let c = appData.customers.find(x => x.id === id); if(!c) return;
+            let btnMobile = document.getElementById('btnCallMobile'); let btnLandline = document.getElementById('btnCallLandline');
+            if (c.mobile) { btnMobile.style.display = 'block'; btnMobile.onclick = () => { window.location.href = `tel:${c.mobile}`; closeModal('callModal'); }; btnMobile.innerText = `📱 打手機 (${c.mobile})`; } else { btnMobile.style.display = 'none'; }
+            if (c.landline) { btnLandline.style.display = 'block'; btnLandline.onclick = () => { window.location.href = `tel:${c.landline}`; closeModal('callModal'); }; btnLandline.innerText = `☎️ 打市話 (${c.landline})`; } else { btnLandline.style.display = 'none'; }
+            if (!c.mobile && !c.landline) { alert('該客戶尚未建立電話資料！'); return; } openModal('callModal');
+        }
+
+        function jumpToSidebarFromMap(id) { sidebarSingleCustomerFilter = id; let sidebar = document.getElementById('sidebar'); if(!sidebar.classList.contains('active')) { sidebar.classList.add('active'); document.body.classList.add('sidebar-open'); } renderSidebar(); }
+        function openNavById(customerId) { let c = appData.customers.find(x => x.id === customerId); if(c) { let target = c.address ? c.address : `${c.lat},${c.lng}`; window.open('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(target), '_blank'); } }
+
+        function renderMapMarkers() {
+            for (let k in markers) map.removeLayer(markers[k]);
+            appData.customers.forEach(c => {
+                if(c.lat && c.lng) {
+                    let isDealed = (c.status === '已成交'); let pinColor = isDealed ? '#48bb78' : '#3182ce'; 
+                    let customIcon = L.divIcon({ html: `<svg width="26" height="40" viewBox="0 0 24 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 40 12 40C12 40 24 21 24 12C24 5.37 18.63 0 12 0ZM12 16C9.79 16 8 14.21 8 12C8 9.79 9.79 8 12 8C14.21 8 16 9.79 16 12C16 14.21 14.21 16 12 16Z" fill="${pinColor}" stroke="#ffffff" stroke-width="1.2"/></svg>`, className: 'custom-map-pin', iconSize: [26, 40], iconAnchor: [13, 40], popupAnchor: [0, -36] });
+                    let marker = L.marker([c.lat, c.lng], { draggable: true, icon: customIcon }).addTo(map);
+                    marker.bindPopup(`<b>${c.storeName}</b> [${c.region || '未設區'}]<br>狀態: ${c.status || '開發中'}<br>老闆: ${c.bossName}<br>電話: ${c.landline}`);
+                    marker.on('click', function() { jumpToSidebarFromMap(c.id); }); marker.on('dragend', function(event) { let position = marker.getLatLng(); c.lat = position.lat; c.lng = position.lng; saveData(); marker.bindPopup(`<b>${c.storeName}</b><br>老闆: ${c.bossName}<br>(手動更新)`).openPopup(); });
+                    markers[c.id] = marker;
+                }
+            });
+        }
+
+        function updateSidebarFilterOptions() { let select = document.getElementById('sidebarRegionFilter'); let html = '<option value="all">-- 顯示所有區域 --</option>' + appData.regions.map(r => `<option value="${r}">${r}</option>`).join(''); if(select) select.innerHTML = html; }
+        function updateTalkFilterOptions() { let select = document.getElementById('talkRegionFilter'); let html = '<option value="all">-- 顯示所有區域 --</option>' + appData.regions.map(r => `<option value="${r}">${r}</option>`).join(''); if(select) select.innerHTML = html; }
+
+        function renderSidebar() {
+            let filterValue = document.getElementById('sidebarRegionFilter')?.value || 'all'; let searchKeyword = document.getElementById('sidebarSearch')?.value.trim().toLowerCase() || ''; let html = '';
+            if (sidebarSingleCustomerFilter) html += `<div style="padding:8px; background:#ebf8ff; border:1px solid #bee3f8; border-radius:6px; margin-bottom:12px; font-size:13px; color:#2b6cb0; display:flex; justify-content:space-between; align-items:center;"><span>📌 單一調閱鎖定模式</span><button onclick="sidebarSingleCustomerFilter=null; renderSidebar();" style="padding:2px 6px; font-size:11px; background:#2b6cb0; color:white; border-radius:4px;">顯示全部</button></div>`;
+
+            appData.customers.forEach(c => {
+                if (sidebarSingleCustomerFilter && c.id !== sidebarSingleCustomerFilter) return; if (!sidebarSingleCustomerFilter && filterValue !== 'all' && c.region !== filterValue) return; if (searchKeyword && !c.storeName.toLowerCase().includes(searchKeyword) && !c.bossName.toLowerCase().includes(searchKeyword)) return;
+
+                let statusBadgeHtml = (c.status || '開發中') === '已成交' ? `<span class="status-badge" style="color:#2f855a; background:#f0fff4;"><span class="status-dot dot-dealed"></span>已成交</span>` : `<span class="status-badge" style="color:#2b6cb0; background:#ebf8ff;"><span class="status-dot dot-developing"></span>開發中</span>`;
+                let inlineNotesDiv = ''; let rawNotesHtml = getNotesHtml(c);
+                if (rawNotesHtml) inlineNotesDiv = `<div id="inline_notes_${c.id}" style="display:none; background:rgba(26, 32, 44, 0.95); color:white; padding:12px; border-radius:8px; font-size:13px; margin-top:12px; border:1px solid #4a5568; line-height:1.5; text-align:left; cursor:default;">📝 <b style="color:#63b3ed;">最新備註內容：</b><br><br>${rawNotesHtml}</div>`;
+
+                html += `<div class="customer-card" onclick="toggleMobileNotes(event, '${c.id}')" onmouseenter="if(window.innerWidth > 768) showCardTooltip(this, '${c.id}')" onmouseleave="if(window.innerWidth > 768) hideCardTooltip()">
+                    <h3><span>${c.storeName}</span>${statusBadgeHtml}</h3>
+                    <p style="font-size:12px; margin-top:-4px; margin-bottom:8px;"><span style="background:#e2e8f0; padding:2px 6px; border-radius:4px; color:#4a5568;">${c.region || '無區域'}</span></p>
+                    <p>老闆：${c.bossName} | 電話：${c.landline}</p><p>地址：${c.address}</p>
+                    <div style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap;">
+                        <button style="padding:4px 8px; font-size:12px; background:#48bb78; color:white;" onclick="openNavById('${c.id}')">🚗 導航</button>
+                        <button style="padding:4px 8px; font-size:12px; background:#319795; color:white;" onclick="promptCall('${c.id}')">📞 打電話</button>
+                        <button class="btn-primary" style="padding:4px 8px; font-size:12px;" onclick="editCustomer('${c.id}')">修改</button>
+                        <button style="padding:4px 8px; font-size:12px; background:#f6ad55; color:#2d3748;" onclick="openCustomerQuotes('${c.id}')">💰 報價</button>
+                        <button style="padding:4px 8px; font-size:12px; background:#3182ce; color:white;" onclick="openCustomerTimelineFromSidebar('${c.id}')">💬 聊天紀錄</button>
+                        <button style="padding:4px 8px; font-size:12px; background:#cbd5e0; color:#2d3748;" onclick="map.flyTo([${c.lat}, ${c.lng}], 16)">📍定位</button>
+                    </div>${inlineNotesDiv}
+                </div>`;
+            }); document.getElementById('customerListContainer').innerHTML = html || '<p style="color:#718096;text-align:center;">找不到符合條件的客戶</p>';
+        }
+
+        function editCustomer(id) {
+            let c = appData.customers.find(x => x.id === id);
+            if(c) {
+                document.getElementById('customerRegion').value = c.region || ''; document.getElementById('customerStatus').value = c.status || '開發中'; document.getElementById('storeName').value = c.storeName; document.getElementById('bossName').value = c.bossName; document.getElementById('landline').value = c.landline; document.getElementById('mobile').value = c.mobile; document.getElementById('address').value = c.address; document.getElementById('customerNote').value = c.note || ''; document.getElementById('editCustomerId').value = c.id; document.getElementById('customerModalTitle').textContent = '修改客戶資料'; document.getElementById('saveCustomerBtn').textContent = '儲存修改'; document.getElementById('deleteCustomerBtn').style.display = 'block'; openModal('customerModal');
+            }
+        }
+
+        function getCustomerPrice(customer, product) { let finalPrice = product.price; if (!customer.records) customer.records = []; let sortedRecords = [...customer.records].sort((a,b) => new Date(a.date) - new Date(b.date)); sortedRecords.forEach(r => { if (r.quoteChanges && Array.isArray(r.quoteChanges)) { r.quoteChanges.forEach(change => { if (change.productId === product.id) finalPrice = calculateSingleChange(finalPrice, change, product.price); }); } else if (r.quoteChange && r.quoteChange.productId === product.id) { finalPrice = calculateSingleChange(finalPrice, r.quoteChange, product.price); } }); return finalPrice; }
+        function calculateSingleChange(currentPrice, change, standardPrice) { let amt = Number(change.amount) || 0; if (change.type === 'direct') return amt; if (change.type === 'increase') return currentPrice + amt; if (change.type === 'decrease') return currentPrice - amt; if (change.type === 'maintain') return currentPrice; return currentPrice; }
+        function getCustomerHistoryProductSet(customer) { let historyIds = new Set(); if(customer && customer.records) { customer.records.forEach(r => { if (r.quoteChanges && Array.isArray(r.quoteChanges)) { r.quoteChanges.forEach(qc => { if(qc.productId) historyIds.add(qc.productId); }); } else if (r.quoteChange && r.quoteChange.productId) { historyIds.add(r.quoteChange.productId); } }); } return historyIds; }
+        
+        function filterQuoteProductOptions() { let keyword = document.getElementById('quoteProductSearch') ? document.getElementById('quoteProductSearch').value.trim().toLowerCase() : ''; let selectAll = document.getElementById('quoteProductSelect'); let htmlAll = '<option value="">-- 請選擇一項商品項目調看資料 --</option>'; let sortedProducts = sortProductsAlphaNumeric([...appData.products]); sortedProducts.forEach(p => { if (!keyword || p.name.toLowerCase().includes(keyword)) htmlAll += `<option value="${p.id}">${p.name}</option>`; }); selectAll.innerHTML = htmlAll; }
+        function populateHistoryProductsDropdown(customer) { let historySelect = document.getElementById('quoteHistoryProductSelect'); if(!historySelect) return; let historyIds = getCustomerHistoryProductSet(customer); let htmlHistory = '<option value="">-- 由過往洽談歷史中快速選取 --</option>'; let hasHistory = false; let sortedProducts = sortProductsAlphaNumeric([...appData.products]); sortedProducts.forEach(p => { if(historyIds.has(p.id)) { htmlHistory += `<option value="${p.id}">${p.name}</option>`; hasHistory = true; } }); historySelect.innerHTML = htmlHistory; historySelect.disabled = !hasHistory; }
+
+        function openCustomerQuotes(id) { let c = appData.customers.find(x => x.id === id); if(!c) return; currentQuoteCustomerId = id; document.getElementById('customerQuotesTitle').textContent = `${c.storeName} - 專屬商品報價單`; if(document.getElementById('quoteProductSearch')) document.getElementById('quoteProductSearch').value = ''; filterQuoteProductOptions(); populateHistoryProductsDropdown(c); document.getElementById('singleQuoteDisplay').innerHTML = '<p style="color:#a0aec0; text-align:center; padding: 20px 0;">請由上方選單選取商品調看</p>'; openModal('customerQuotesModal'); }
+        function openMultiQuotePanel() { let container = document.getElementById('quotesModalContainer'); let rightPanel = document.getElementById('quotesRightPanel'); container.style.width = '880px'; rightPanel.style.display = 'flex'; rightPanel.style.flexDirection = 'column'; if(document.getElementById('multiQuoteRowsContainer').children.length === 0) addMultiQuoteRow(); }
+        function closeMultiQuotePanel() { let container = document.getElementById('quotesModalContainer'); let rightPanel = document.getElementById('quotesRightPanel'); container.style.width = '440px'; rightPanel.style.display = 'none'; }
+
+        function renderSingleProductQuote(sourceType) { let pId = sourceType === 'all' ? document.getElementById('quoteProductSelect').value : document.getElementById('quoteHistoryProductSelect').value; if(sourceType === 'all') document.getElementById('quoteHistoryProductSelect').value = ""; else document.getElementById('quoteProductSelect').value = ""; let display = document.getElementById('singleQuoteDisplay'); if(!pId) { display.innerHTML = '<p style="color:#a0aec0; text-align:center; padding: 20px 0;">請由上方選單選取商品調看</p>'; return; } let c = appData.customers.find(x => x.id === currentQuoteCustomerId); let p = appData.products.find(x => x.id === pId); if(!c || !p) return; let customPrice = getCustomerPrice(c, p); let diff = Math.abs(customPrice - p.price); let statusDisplay = customPrice > p.price ? `<span style="color:#e53e3e; font-weight:bold;">▲ 較標準高 ($${fmtMoney(diff)})</span>` : (customPrice < p.price ? `<span style="color:#3182ce; font-weight:bold;">▼ 較標準低 ($${fmtMoney(diff)})</span>` : `<span style="color:#718096;">與標準價相同</span>`); display.innerHTML = `<table style="margin-top:10px;"><tr><th style="width:40%;">欄位名稱</th><th>即時系統資料</th></tr><tr><td>商品品項</td><td style="font-weight:bold; color:#2d3748;">${p.name}</td></tr><tr><td>品牌</td><td>${p.brand || '無'}</td></tr><tr><td>分類</td><td>${p.type}</td></tr><tr><td>標準定價</td><td>$${fmtMoney(p.price)}</td></tr><tr><td>最新專屬報價</td><td style="font-weight:bold; color:#2b6cb0; font-size:16px;">$${fmtMoney(customPrice)}</td></tr><tr><td>狀態比對結果</td><td>${statusDisplay}</td></tr></table>`; }
+        function addMultiQuoteRow() { let container = document.getElementById('multiQuoteRowsContainer'); let rowId = "multi_qrow_" + Date.now() + "_" + Math.floor(Math.random()*1000); let html = `<div class="quote-row-item" id="${rowId}" style="background: #f7fafc; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 12px;"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><span style="font-size:12px; font-weight:bold; color:#dd6b20;">🔍 指定調閱品項</span><button type="button" class="btn-danger" onclick="document.getElementById('${rowId}').remove()" style="padding:2px 6px; font-size:11px;">🗑️ 移除</button></div><div class="form-group" style="margin-bottom:8px;"><input type="text" class="multi-row-search" oninput="filterMultiRowOptions('${rowId}')" placeholder="搜尋曾洽談商品名稱..." style="width:100%; padding:6px; font-size:12px; border:1px solid #cbd5e0; border-radius:4px;"></div><div class="form-group" style="margin-bottom:8px;"><select class="multi-row-select" onchange="renderMultiRowQuote('${rowId}')" style="width:100%; padding:6px; font-size:13px; font-weight:bold; border:1px solid #cbd5e0;"></select></div><div class="multi-row-display"></div></div>`; container.insertAdjacentHTML('beforeend', html); filterMultiRowOptions(rowId); }
+        function filterMultiRowOptions(rowId) { let row = document.getElementById(rowId); if(!row) return; let keyword = row.querySelector('.multi-row-search').value.trim().toLowerCase(); let select = row.querySelector('.multi-row-select'); let c = appData.customers.find(x => x.id === currentQuoteCustomerId); let historyIds = getCustomerHistoryProductSet(c); let html = '<option value="">-- 請選擇歷史洽談商品 --</option>'; let sortedProducts = sortProductsAlphaNumeric([...appData.products]); sortedProducts.forEach(p => { if(historyIds.has(p.id) && (!keyword || p.name.toLowerCase().includes(keyword))) html += `<option value="${p.id}">${p.name}</option>`; }); select.innerHTML = html; renderMultiRowQuote(rowId); }
+        function renderMultiRowQuote(rowId) { let row = document.getElementById(rowId); if(!row) return; let pId = row.querySelector('.multi-row-select').value; let display = row.querySelector('.multi-row-display'); if(!pId) { display.innerHTML = '<p style="color:#a0aec0; font-size:11px; text-align:center; margin:5px 0;">請由上方選取品項</p>'; return; } let c = appData.customers.find(x => x.id === currentQuoteCustomerId); let p = appData.products.find(x => x.id === pId); if(!c || !p) return; let customPrice = getCustomerPrice(c, p); let diff = Math.abs(customPrice - p.price); let statusDisplay = customPrice > p.price ? `<span style="color:#e53e3e; font-weight:bold;">▲ 較高 ($${fmtMoney(diff)})</span>` : (customPrice < p.price ? `<span style="color:#3182ce; font-weight:bold;">▼ 較低 ($${fmtMoney(diff)})</span>` : `<span style="color:#718096;">等同標準價</span>`); display.innerHTML = `<table style="margin-top:5px; background: white; width:100%; border:1px solid #e2e8f0;"><tr><td style="font-size:11px; padding:4px;">標準定價</td><td style="font-size:11px; padding:4px;">$${fmtMoney(p.price)}</td></tr><tr><td style="font-size:11px; padding:4px; font-weight:bold; color:#2b6cb0;">專屬售價</td><td style="font-size:11px; padding:4px; font-weight:bold; color:#2b6cb0;">$${fmtMoney(customPrice)}</td></tr><tr><td style="font-size:11px; padding:4px;">狀態比對</td><td style="font-size:11px; padding:4px;">${statusDisplay}</td></tr></table>`; }
+
+        /* 洽談紀錄與時間線 */
+        function renderRecentTalks() {
+            let allRecords = [];
+            appData.customers.forEach(c => {
+                if(c.records) {
+                    c.records.forEach(r => {
+                        allRecords.push({ customerId: c.id, customerName: c.storeName, date: r.date, title: r.title });
+                    });
+                }
+            });
+            allRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+            let top3 = allRecords.slice(0, 3);
+            let container = document.getElementById('recentTalksContainer');
+            let arrowBg = document.querySelector('.recent-arrow-bg');
+            
+            if (top3.length === 0) {
+                container.innerHTML = '<p style="font-size: 12px; color: #a0aec0; width:100%; text-align:center;">尚無近期洽談紀錄</p>';
+                if (arrowBg) arrowBg.style.display = 'none';
+                return;
+            }
+            
+            if (arrowBg) arrowBg.style.display = 'flex';
+            let html = '';
+            top3.forEach(rec => {
+                html += `
+                <div class="recent-bubble" onclick="openTimeline('${rec.customerId}')" title="客戶：${rec.customerName}\n標題：${rec.title}">
+                    <div class="rb-date">${rec.date}</div>
+                    <div class="rb-title">${rec.title}</div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function renderTalkCustomerList() { let filterValue = document.getElementById('talkRegionFilter')?.value || 'all'; let searchKeyword = document.getElementById('talkSearch')?.value.trim().toLowerCase() || ''; let html = ''; appData.customers.forEach(c => { if (filterValue !== 'all' && c.region !== filterValue) return; if (searchKeyword && !c.storeName.toLowerCase().includes(searchKeyword) && !c.bossName.toLowerCase().includes(searchKeyword)) return; html += `<button onclick="openTimeline('${c.id}')" style="text-align:left; border:1px solid #cbd5e0; padding:10px; display:flex; justify-content:space-between; align-items:center; transition:0.2s; background:white;"><span><b>${c.storeName}</b> (${c.bossName})</span><span style="font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px; color:#4a5568;">${c.region || '無區域'}</span></button>`; }); document.getElementById('talkCustomerList').innerHTML = html || '<p style="text-align:center; padding:15px;">找不到符合搜尋條件的客戶</p>'; }
+        
+        function openTimeline(id) { 
+            let c = appData.customers.find(x => x.id === id); if(!c) return; 
+            currentTalkCustomerId = id; document.getElementById('timelineTitle').textContent = `洽談紀錄 - ${c.storeName}`; 
+            closeModal('selectTalkModal'); openModal('timelineModal'); renderTimeline(); renderBossPanel(); 
+        }
+
+        function jumpToSidebarForCustomer() { if(!currentTalkCustomerId) return; sidebarSingleCustomerFilter = currentTalkCustomerId; closeModal('timelineModal'); let sidebar = document.getElementById('sidebar'); if(!sidebar.classList.contains('active')) { sidebar.classList.add('active'); document.body.classList.add('sidebar-open'); } renderSidebar(); let c = appData.customers.find(x => x.id === currentTalkCustomerId); if(c && c.lat && c.lng) map.flyTo([c.lat, c.lng], 16); }
+        function openCustomerTimelineFromSidebar(id) { let sidebar = document.getElementById('sidebar'); sidebar.classList.remove('active'); document.body.classList.remove('sidebar-open'); openTimeline(id); }
+
+        function handleBossPhotoUpload(event) { let file = event.target.files[0]; if(!file) return; let reader = new FileReader(); reader.onload = function(e) { let img = new Image(); img.onload = function() { let canvas = document.createElement('canvas'); canvas.width = 268; canvas.height = 288; let ctx = canvas.getContext('2d'); let scale = Math.max(canvas.width / img.width, canvas.height / img.height); let x = (canvas.width / scale - img.width) / 2; let y = (canvas.height / scale - img.height) / 2; ctx.drawImage(img, x, y, img.width, img.height, 0, 0, canvas.width, canvas.height); let dataUrl = canvas.toDataURL('image/jpeg', 0.8); let c = appData.customers.find(cx => cx.id === currentTalkCustomerId); if(c) { c.bossPhoto = dataUrl; saveData(); renderBossPanel(); } }; img.src = e.target.result; }; reader.readAsDataURL(file); }
+
+        function renderBossPanel() {
+            let c = appData.customers.find(cx => cx.id === currentTalkCustomerId); if(!c) return; document.getElementById('bossInfoText').innerHTML = `<b>${c.storeName}</b><br>老闆：${c.bossName}<br>電話：${c.landline}<br>手機：${c.mobile || '無紀錄'}`; let imgEl = document.getElementById('bossImage'); let svgEl = document.getElementById('defaultBossSvg'); if(c.bossPhoto) { imgEl.src = c.bossPhoto; imgEl.style.display = 'block'; svgEl.style.display = 'none'; } else { imgEl.src = ''; imgEl.style.display = 'none'; svgEl.style.display = 'block'; }
+            let noteBox = document.getElementById('bossNoteBox'); if (c.note && c.note.trim() !== '') { noteBox.innerHTML = `📝 <b style="color:#63b3ed;">客戶備註：</b><br><br>${c.note.replace(/\n/g, '<br>')}`; noteBox.style.display = 'block'; } else { noteBox.style.display = 'none'; noteBox.innerHTML = ''; }
+            let layer = document.getElementById('stickyNotesLayer'); layer.innerHTML = '';
+            if(c.stickyNotes) { c.stickyNotes.forEach(note => { let bgClass = note.color === 'pink' ? 'note-pink' : (note.color === 'yellow' ? 'note-yellow' : 'note-green'); let html = `<div class="sticky-note ${bgClass}" id="${note.id}" style="left:${note.x}px; top:${note.y}px;"><div class="note-spinner" id="spinner_${note.id}"></div><button class="delete-note" onclick="deleteStickyNote('${note.id}')">✕</button><textarea oninput="updateStickyNoteText('${note.id}', this.value)" onblur="syncStickyToNote('${c.id}', this.value); this.style.pointerEvents='none';">${note.text}</textarea></div>`; layer.insertAdjacentHTML('beforeend', html); }); }
+        }
+
+        function addStickyNote(color) { let c = appData.customers.find(cx => cx.id === currentTalkCustomerId); if(!c) return; if(!c.stickyNotes) c.stickyNotes = []; let newNote = { id: 'note_' + Date.now(), color: color, x: 91, y: 101, text: '' }; c.stickyNotes.push(newNote); saveData(); renderBossPanel(); }
+        function updateStickyNoteText(id, text) { let c = appData.customers.find(cx => cx.id === currentTalkCustomerId); if(c && c.stickyNotes) { let n = c.stickyNotes.find(x => x.id === id); if(n) { n.text = text; saveData(); } } }
+        function deleteStickyNote(id) { let c = appData.customers.find(cx => cx.id === currentTalkCustomerId); if(c && c.stickyNotes) { c.stickyNotes = c.stickyNotes.filter(x => x.id !== id); saveData(); renderBossPanel(); } }
+        function syncStickyToNote(customerId, text) { if(!text || !text.trim()) return; let c = appData.customers.find(cx => cx.id === customerId); if(c) { if(!c.noteHistory) c.noteHistory = []; let isDuplicate = c.noteHistory.some(h => h.text.includes(text)); let isFromCurrentNote = c.note && c.note.includes(text); if(!isDuplicate && !isFromCurrentNote) { c.noteHistory.push({ date: new Date().toLocaleString('zh-TW', { hour12: false }), text: "【便利貼補充】 " + text }); saveData(); } } }
+
+        function toggleQuoteSection() { let section = document.getElementById('quoteSection'); if(section.style.display === 'none') { section.style.display = 'block'; if(document.getElementById('quoteItemsContainer').children.length === 0) addQuoteRow(); } else { section.style.display = 'none'; document.getElementById('quoteItemsContainer').innerHTML = ''; } }
+        function updateQuoteRowInfo(rowId) { 
+            let row = document.getElementById(rowId); if(!row) return; 
+            let pId = row.querySelector('.row-product-select').value; 
+            let infoDiv = row.querySelector('.row-product-info'); 
+            if(!pId) { infoDiv.style.display = 'none'; infoDiv.innerHTML = ''; return; } 
+            let p = appData.products.find(x => x.id === pId); 
+            if(p) { 
+                let profitPercent = p.price ? (((p.price - p.cost) / p.price) * 100).toFixed(1) : "0.0"; 
+                let colorHex = Number(profitPercent) > 0 ? '#48bb78' : '#e53e3e'; 
+                let c = appData.customers.find(cx => cx.id === currentTalkCustomerId); 
+                let customPriceHtml = ''; 
+                if(c) { 
+                    let customPrice = getCustomerPrice(c, p); 
+                    let cpColor = customPrice > p.price ? '#e53e3e' : (customPrice < p.price ? '#3182ce' : '#2d3748'); 
+                    customPriceHtml = `  |  <b>專屬報價：</b><span style="color:${cpColor}; font-weight:bold;">$${fmtMoney(customPrice)}</span>`; 
+                } 
+                infoDiv.style.display = 'block'; 
+                infoDiv.innerHTML = `🛒 <b>成本：</b>$${fmtMoney(p.cost)}  |  <b>定價：</b>$${fmtMoney(p.price)}  |  <b>毛利：</b><span style="color:${colorHex}; font-weight:bold;">${profitPercent}%</span>${customPriceHtml}`; 
+            } 
+        }
+        function addQuoteRow(existingData = null) { 
+            let container = document.getElementById('quoteItemsContainer'); 
+            let rowId = "quote_row_" + Date.now() + "_" + Math.floor(Math.random()*1000); 
+            
+            let existingProductName = '';
+            if (existingData && existingData.productId) {
+                let ep = appData.products.find(x => x.id === existingData.productId);
+                if (ep) existingProductName = ep.name;
+            }
+
+            let html = `
+            <div class="quote-row-item" id="${rowId}">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                    <span style="font-size:12px; font-weight:bold; color:#dd6b20;">📦 報價品項</span>
+                    <button type="button" class="btn-danger" onclick="document.getElementById('${rowId}').remove()" style="padding:2px 6px; font-size:11px;">🗑️ 刪除此筆</button>
+                </div>
+                <div class="row-product-info" style="display:none; margin-bottom:5px; padding:6px; background:rgba(255,255,255,0.7); border:1px dashed #a0aec0; border-radius:4px; font-size:12px; color:#2d3748;"></div>
+                <div class="form-group" style="margin-bottom:8px;">
+                    <input type="hidden" class="row-product-select" value="${existingData ? existingData.productId : ''}">
+                    <button type="button" class="product-display-btn" onclick="openSelectProductModal('${rowId}')" style="width:100%; padding:8px; font-size:13px; background:#edf2f7; color:#2b6cb0; border:1px solid #cbd5e0; text-align:left; font-weight:bold; border-radius:4px; cursor:pointer;">${existingProductName ? '📦 ' + existingProductName : '🔍 點擊於商品清單中選取...'}</button>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <select class="row-price-type" onchange="checkPriceTypeLock('${rowId}')" style="width:60%; padding:6px; font-size:13px;">
+                        <option value="direct" ${existingData && existingData.type === 'direct' ? 'selected' : ''}>直接設定專屬報價</option>
+                        <option value="increase" ${existingData && existingData.type === 'increase' ? 'selected' : ''}>在累積售價上「漲價」</option>
+                        <option value="decrease" ${existingData && existingData.type === 'decrease' ? 'selected' : ''}>在累積售價上「降價」</option>
+                        <option value="maintain" ${existingData && existingData.type === 'maintain' ? 'selected' : ''}>在累積售價上「維持價格」</option>
+                    </select>
+                    <input type="number" class="row-price-amount" placeholder="金額" value="${existingData ? existingData.amount : ''}" style="width:40%; padding:6px; font-size:13px;">
+                </div>
+            </div>`; 
+            container.insertAdjacentHTML('beforeend', html); 
+            checkPriceTypeLock(rowId); 
+            if (existingData) updateQuoteRowInfo(rowId); 
+        }
+        function checkPriceTypeLock(rowId) { let row = document.getElementById(rowId); if(!row) return; let type = row.querySelector('.row-price-type').value; let amtInput = row.querySelector('.row-price-amount'); if(type === 'maintain') { amtInput.value = 0; amtInput.disabled = true; amtInput.style.background = "#edf2f7"; } else { amtInput.disabled = false; amtInput.style.background = "#ffffff"; if(amtInput.value == 0) amtInput.value = ""; } }
+        function getMultipleQuotesNote(quoteChanges) { if (!quoteChanges || !Array.isArray(quoteChanges) || quoteChanges.length === 0) return ""; let summaryNotes = []; quoteChanges.forEach(qc => { let p = appData.products.find(x => x.id === qc.productId); if (!p) return; let logText = qc.type === 'direct' ? `指定專屬售價為 $${fmtMoney(qc.amount)}` : (qc.type === 'increase' ? `累計售價「調漲 $${fmtMoney(qc.amount)}」` : (qc.type === 'decrease' ? `累計售價「調降 $${fmtMoney(qc.amount)}」` : `協議「維持價格不變」`)); summaryNotes.push(`• ${p.name} ➔ ${logText}`); }); return `\n\n📈 【商品報價變動設定】\n${summaryNotes.join('\n')}`; }
+        function openAddRecordModal() { editRecordIndex = null; clearForms(); document.getElementById('recDate').valueAsDate = new Date(); openModal('addRecordModal'); }
+        function saveRecord() { let title = document.getElementById('recTitle').value; let date = document.getElementById('recDate').value; let content = document.getElementById('recContent').value; let isChat = document.getElementById('attrChat').checked; let isQuote = document.getElementById('attrQuote').checked; if(!title || !date) return alert('標題與日期為必填項目'); let quoteChanges = []; if(document.getElementById('quoteSection').style.display === 'block') { document.querySelectorAll('#quoteItemsContainer .quote-row-item').forEach(row => { let pId = row.querySelector('.row-product-select').value; let pType = row.querySelector('.row-price-type').value; let pAmt = Number(row.querySelector('.row-price-amount').value) || 0; if(pId) quoteChanges.push({ productId: pId, type: pType, amount: pAmt }); }); } let colorClass = isChat && isQuote ? 'bubble-orange' : (isChat ? 'bubble-yellow' : (isQuote ? 'bubble-red' : 'bubble-white')); let c = appData.customers.find(x => x.id === currentTalkCustomerId); let recordData = { title, date, content, colorClass, attrChat: isChat, attrQuote: isQuote, quoteChanges }; if(!c.records) c.records = []; if (editRecordIndex !== null) c.records[editRecordIndex] = recordData; else c.records.push(recordData); c.records.sort((a,b) => new Date(a.date) - new Date(b.date)); saveData(); closeModal('addRecordModal'); renderTimeline(); }
+        function renderTimeline() { let c = appData.customers.find(x => x.id === currentTalkCustomerId); if(!c || !c.records) return document.getElementById('timelineContent').innerHTML = '<p style="margin-left:20px; color:#718096;">目前尚無洽談紀錄</p>'; c.records.sort((a,b) => new Date(a.date) - new Date(b.date)); let html = c.records.map((r, index) => { let changesArr = r.quoteChanges || (r.quoteChange ? [r.quoteChange] : []); return `<div class="timeline-item"><div class="timeline-bubble ${r.colorClass}"><div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:5px;"><div class="timeline-date">${r.date}</div><div style="margin: -4px -4px 0 0; display:flex; gap:4px;"><button class="btn-primary" style="padding:2px 6px; font-size:11px; background:#4a5568;" onclick="editRecord(${index})">✏️ 修改</button><button class="btn-danger" style="padding:2px 6px; font-size:11px;" onclick="deleteRecord(${index})">🗑️</button></div></div><strong>${r.title}</strong><div style="margin-top:5px; font-size:14px; white-space:pre-wrap;">${r.content + getMultipleQuotesNote(changesArr)}</div></div></div>`; }).join(''); document.getElementById('timelineContent').innerHTML = html || '<p style="margin-left:20px; color:#718096;">目前尚無洽談紀錄</p>'; }
+        function editRecord(index) { let c = appData.customers.find(x => x.id === currentTalkCustomerId); let r = c.records[index]; editRecordIndex = index; document.getElementById('recordModalTitle').textContent = '修改洽談紀錄'; document.getElementById('saveRecordBtn').textContent = '儲存修改'; document.getElementById('recTitle').value = r.title; document.getElementById('recDate').value = r.date; document.getElementById('recContent').value = r.content; document.getElementById('attrChat').checked = r.attrChat || false; document.getElementById('attrQuote').checked = r.attrQuote || false; let section = document.getElementById('quoteSection'); let container = document.getElementById('quoteItemsContainer'); container.innerHTML = ''; let changesArr = r.quoteChanges || (r.quoteChange ? [r.quoteChange] : []); if (changesArr.length > 0) { section.style.display = 'block'; changesArr.forEach(item => { addQuoteRow(item); }); } else { section.style.display = 'none'; } openModal('addRecordModal'); }
+        function deleteRecord(index) { let c = appData.customers.find(x => x.id === currentTalkCustomerId); if(c && c.records) { let targetRecord = c.records.splice(index, 1)[0]; appData.trash.records.push({ customerId: currentTalkCustomerId, record: targetRecord }); saveData(); renderTimeline(); alert('已移入歷史回收桶。'); } }
+        function exportData() { let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData)); let downloadAnchorNode = document.createElement('a'); downloadAnchorNode.setAttribute("href", dataStr); let dateStr = new Date().toISOString().slice(0,10); downloadAnchorNode.setAttribute("download", `汶記SuperMap備份_${dateStr}.json`); document.body.appendChild(downloadAnchorNode); downloadAnchorNode.click(); downloadAnchorNode.remove(); }
+        function importData(event) { let file = event.target.files[0]; if(!file) return; let reader = new FileReader(); reader.onload = function(e) { try { let parsed = JSON.parse(e.target.result); if(parsed.customers && parsed.products) { appData = parsed; if(!appData.trash) appData.trash = { customers: [], products: [], records: [], regions: [], categories: [], brands: [] }; saveData(); updateRegionDatalist(); updateCategoryBrandDropdowns(); updateSidebarFilterOptions(); updateTalkFilterOptions(); alert("資料還原成功！"); location.reload(); } else alert("備份檔案格式不符！"); } catch(err) { alert("無法讀取此檔案！"); } }; reader.readAsText(file); }
+        function toggleBossPanel(btn) { const panel = document.getElementById('bossAttributesPanel'); panel.classList.toggle('active'); if (panel.classList.contains('active')) { btn.innerHTML = "隱藏老闆屬性與策略筆記 ▲"; btn.style.background = "#e2e8f0"; } else { btn.innerHTML = "查看老闆屬性與策略筆記 ▼"; btn.style.background = "#edf2f7"; } }
+
+        /* 手機版便利貼長按編輯機制 */
+        window.addEventListener('DOMContentLoaded', () => {
+            let layer = document.getElementById('stickyNotesLayer'); let offsetX = 0, offsetY = 0; let notePressTimer;
+
+            // 電腦版一般點擊拖曳
+            layer.addEventListener('mousedown', function(e) { if(e.target.classList.contains('sticky-note')) { activeStickyNote = e.target; let rect = activeStickyNote.getBoundingClientRect(); offsetX = e.clientX - rect.left; offsetY = e.clientY - rect.top; activeStickyNote.style.zIndex = "100"; } });
+            document.addEventListener('mousemove', function(e) { if(activeStickyNote) { let containerRect = document.getElementById('bossPhotoContainer').getBoundingClientRect(); let x = e.clientX - containerRect.left - offsetX; let y = e.clientY - containerRect.top - offsetY; x = Math.max(0, Math.min(x, 268 - 85)); y = Math.max(0, Math.min(y, 288 - 85)); activeStickyNote.style.left = x + 'px'; activeStickyNote.style.top = y + 'px'; } });
+            document.addEventListener('mouseup', function(e) { if(activeStickyNote) { activeStickyNote.style.zIndex = "10"; let noteId = activeStickyNote.id; let x = parseInt(activeStickyNote.style.left); let y = parseInt(activeStickyNote.style.top); let c = appData.customers.find(cx => cx.id === currentTalkCustomerId); if(c && c.stickyNotes) { let n = c.stickyNotes.find(nx => nx.id === noteId); if(n) { n.x = x; n.y = y; saveData(); } } activeStickyNote = null; } });
+            
+            // 手機版防誤觸長按拖曳
+            layer.addEventListener('touchstart', function(e) {
+                if(e.target.closest('.sticky-note') && !e.target.classList.contains('delete-note')) {
+                    let noteEl = e.target.closest('.sticky-note');
+                    let ta = noteEl.querySelector('textarea');
+                    
+                    // 若已在編輯狀態，允許直接操作文字框
+                    if(ta.style.pointerEvents === 'auto') return;
+                    
+                    e.preventDefault();
+                    activeStickyNote = noteEl;
+                    let rect = activeStickyNote.getBoundingClientRect();
+                    let touch = e.touches[0];
+                    offsetX = touch.clientX - rect.left; offsetY = touch.clientY - rect.top;
+                    activeStickyNote.style.zIndex = "100";
+                    
+                    let spinner = document.getElementById('spinner_' + activeStickyNote.id);
+                    if(spinner) spinner.style.display = 'block'; // 顯示旋轉提示圈
+                    
+                    // 1秒後觸發打字編輯模式
+                    notePressTimer = setTimeout(() => {
+                        if(spinner) spinner.style.display = 'none';
+                        ta.style.pointerEvents = 'auto'; // 開啟點擊
+                        ta.focus(); // 強制獲得焦點進入輸入狀態
+                        activeStickyNote = null; // 取消移動狀態
+                    }, 1000);
+                }
+            }, {passive: false});
+            
+            document.addEventListener('touchmove', function(e) {
+                if(activeStickyNote) {
+                    e.preventDefault();
+                    clearTimeout(notePressTimer); // 若開始滑動則取消長按計時
+                    let spinner = document.getElementById('spinner_' + activeStickyNote.id);
+                    if(spinner) spinner.style.display = 'none';
+
+                    let touch = e.touches[0]; let containerRect = document.getElementById('bossPhotoContainer').getBoundingClientRect();
+                    let x = touch.clientX - containerRect.left - offsetX; let y = touch.clientY - containerRect.top - offsetY;
+                    x = Math.max(0, Math.min(x, 268 - 85)); y = Math.max(0, Math.min(y, 288 - 85));
+                    activeStickyNote.style.left = x + 'px'; activeStickyNote.style.top = y + 'px';
+                }
+            }, {passive: false});
+            
+            document.addEventListener('touchend', function(e) {
+                if(activeStickyNote) {
+                    clearTimeout(notePressTimer);
+                    let spinner = document.getElementById('spinner_' + activeStickyNote.id);
+                    if(spinner) spinner.style.display = 'none';
+
+                    activeStickyNote.style.zIndex = "10"; let noteId = activeStickyNote.id; let x = parseInt(activeStickyNote.style.left); let y = parseInt(activeStickyNote.style.top); let c = appData.customers.find(cx => cx.id === currentTalkCustomerId); if(c && c.stickyNotes) { let n = c.stickyNotes.find(nx => nx.id === noteId); if(n) { n.x = x; n.y = y; saveData(); } } activeStickyNote = null;
+                }
+            });
+        });
+
+        updateCategoryBrandDropdowns(); renderMapMarkers(); updateRegionDatalist(); updateSidebarFilterOptions(); updateTalkFilterOptions();
+    </script>
+</body>
+</html>
