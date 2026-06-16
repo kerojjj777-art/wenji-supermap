@@ -1547,7 +1547,7 @@ function exportProductsToExcel() {
             } 
         }
 
-        function renderMapMarkers() {
+function renderMapMarkers() {
             try {
                 if(!map) return;
                 for (let k in markers) map.removeLayer(markers[k]);
@@ -1557,7 +1557,29 @@ function exportProductsToExcel() {
                         let customIcon = L.divIcon({ html: `<svg width="26" height="40" viewBox="0 0 24 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 40 12 40C12 40 24 21 24 12C24 5.37 18.63 0 12 0ZM12 16C9.79 16 8 14.21 8 12C8 9.79 9.79 8 12 8C14.21 8 16 9.79 16 12C16 14.21 14.21 16 12 16Z" fill="${pinColor}" stroke="#ffffff" stroke-width="1.2"/></svg>`, className: 'custom-map-pin', iconSize: [26, 40], iconAnchor: [13, 40], popupAnchor: [0, -36] });
                         let marker = L.marker([c.lat, c.lng], { draggable: true, icon: customIcon }).addTo(map);
                         marker.bindPopup(`<b>${c.storeName}</b> [${c.region || '未設區'}]<br>狀態: ${c.status || '開發中'}<br>老闆: ${c.bossName}<br>電話: ${c.landline}`);
-                        marker.on('click', function() { jumpToSidebarFromMap(c.id); }); marker.on('dragend', function(event) { let position = marker.getLatLng(); c.lat = position.lat; c.lng = position.lng; saveData(); marker.bindPopup(`<b>${c.storeName}</b><br>老闆: ${c.bossName}<br>(手動更新)`).openPopup(); });
+                        
+                        marker.on('click', function() { jumpToSidebarFromMap(c.id); }); 
+                        
+                        // 拖曳開始：紀錄舊位置
+                        marker.on('dragstart', function(event) {
+                            marker._oldLatLng = marker.getLatLng();
+                        });
+
+                        // 拖曳結束：儲存新舊位置到歷史陣列並更新
+                        marker.on('dragend', function(event) { 
+                            let position = marker.getLatLng(); 
+                            let oldLatLng = marker._oldLatLng;
+                            
+                            if (oldLatLng && (oldLatLng.lat !== position.lat || oldLatLng.lng !== position.lng)) {
+                                mapDragHistory.push({ customerId: c.id, oldLat: oldLatLng.lat, oldLng: oldLatLng.lng, newLat: position.lat, newLng: position.lng });
+                                mapDragFuture = []; // 有新動作時，清空未來的重做堆疊
+                            }
+
+                            c.lat = position.lat; 
+                            c.lng = position.lng; 
+                            saveData(); 
+                            marker.bindPopup(`<b>${c.storeName}</b><br>老闆: ${c.bossName}<br>(手動更新)`).openPopup(); 
+                        });
                         markers[c.id] = marker;
                     }
                 });
