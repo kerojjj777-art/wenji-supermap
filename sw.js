@@ -1,4 +1,4 @@
-const CACHE_NAME = 'supermap-cache-v1';
+const CACHE_NAME = 'wenji-supermap-v2';
 const urlsToCache = [
     './',
     './index.html',
