@@ -356,7 +356,7 @@
 
     <div class="header">
         <h1>汶記Super Map</h1>
-        <div class="version">v.2.1.8｜Design by 儒儒魏大哥</div>
+        <div class="version">v.2.1.9｜Design by 儒儒魏大哥</div>
     </div>
 
     <div id="caishenContainer" class="caishen-idle" onclick="triggerCaishen()">
@@ -428,10 +428,14 @@
     <div id="calendarModal" class="modal-overlay">
         </div>
 
-    <div class="map-undo-redo" style="position: absolute; bottom: 75px; left: 15px; z-index: 1000; display: flex; flex-direction: column; gap: 8px;">
-        <button type="button" onclick="undoMapDrag()" style="background: white; border: 1px solid #cbd5e0; border-radius: 8px; width: 36px; height: 36px; font-size: 16px; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.2); display: flex; justify-content: center; align-items: center; transition: 0.2s;" title="回上一步 (復原標記位置)">⏫</button>
-        <button type="button" onclick="redoMapDrag()" style="background: white; border: 1px solid #cbd5e0; border-radius: 8px; width: 36px; height: 36px; font-size: 16px; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.2); display: flex; justify-content: center; align-items: center; transition: 0.2s;" title="重做 (重做標記位置)">⏬</button>
-    </div>
+   <div class="map-undo-redo" style="position: absolute; bottom: 100px; left: 20px; z-index: 1000; display: flex; flex-direction: column;">
+    <button type="button" onclick="undoMapDrag()" class="btn-golden-undo" title="回上一步 (復原標記位置)">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+            <path d="M3 3v5h5"></path>
+        </svg>
+    </button>
+</div>
     <div class="quick-zoom">
         <select id="regionSelect" onchange="zoomToRegion(this.value)">
             <option value="">-- 快速縮放至縣市 --</option>
