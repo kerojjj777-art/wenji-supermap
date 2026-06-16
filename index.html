@@ -1367,13 +1367,13 @@
                 let actionMenuHtml = `<div style="position:relative; display:inline-block; width:100%; text-align:center;"><button type="button" class="btn-primary action-btn-trigger" style="padding:4px 10px; font-size:12px;" onclick="toggleActionMenu('${p.id}')">動作 ▲</button><div id="actionMenu_${p.id}" class="action-menu-content"><button type="button" onclick="editProduct('${p.id}')" style="color:#2b6cb0; font-weight:bold;">✏️ 修改</button><button type="button" onclick="copyProduct('${p.id}')" style="color:#48bb78; font-weight:bold;">📄 複製</button><button type="button" onclick="deleteProduct('${p.id}')" style="color:#e53e3e; font-weight:bold;">🗑️ 刪除</button></div></div>`;
                 
                 // 【修改點】將 ${fmtMoney(p.cost)} 移到定價前面，並在 td 加上 text-align:center 讓資料也置中對齊
-                htmlStr += `<tr>
-                    <td style="text-align:center;"><a href="#" onclick="openProductPreview('${p.id}', false); return false;" style="color:#2b6cb0; text-decoration:underline; font-weight:bold;">${p.name}</a></td>
-                    <td style="text-align:center;">$${fmtMoney(p.cost)}</td>
-                    <td style="text-align:center;">$${fmtMoney(p.price)}</td>
-                    <td style="color:${colorHex}; font-weight:bold; text-align:center;">${profitPercent}%</td>
-                    <td style="overflow:visible; text-align:center;">${actionMenuHtml}</td>
-                </tr>`;
+htmlStr += `<tr>
+    <td style="text-align:center;"><a href="#" onclick="openProductPreview('${p.id}', false); return false;" style="color:#2b6cb0; text-decoration:underline; font-weight:bold;">${p.name}</a></td>
+    <td style="text-align:center;">${fmtMoney(p.cost)}</td>
+    <td style="text-align:center;">${fmtMoney(p.price)}</td>
+    <td style="color:${colorHex}; font-weight:bold; text-align:center;">${profitPercent}%</td>
+    <td style="overflow:visible; text-align:center;">${actionMenuHtml}</td>
+</tr>`;
                 }); document.getElementById('productTableBody').innerHTML = htmlStr || '<tr><td colspan="5" style="text-align:center;color:#a0aec0;">找不到符合條件的商品</td></tr>';
             }
 
