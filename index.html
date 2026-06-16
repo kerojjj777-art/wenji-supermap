@@ -1586,6 +1586,40 @@ function renderMapMarkers() {
             } catch(e) { console.error("Map Marker Error", e); }
         }
 
+        // 復原標記位置
+        function undoMapDrag() {
+            if (mapDragHistory.length === 0) return alert("目前沒有上一步可以復原哦！");
+            
+            let act = mapDragHistory.pop();
+            mapDragFuture.push(act);
+            
+            let c = appData.customers.find(x => x.id === act.customerId);
+            if (c) {
+                c.lat = act.oldLat;
+                c.lng = act.oldLng;
+                saveData();
+                renderMapMarkers();
+                if (map) map.flyTo([c.lat, c.lng], 16); // 貼心視角：地圖自動飛到被還原的地標處
+            }
+        }
+
+        // 重做標記位置
+        function redoMapDrag() {
+            if (mapDragFuture.length === 0) return alert("目前沒有可以重做的動作！");
+            
+            let act = mapDragFuture.pop();
+            mapDragHistory.push(act);
+            
+            let c = appData.customers.find(x => x.id === act.customerId);
+            if (c) {
+                c.lat = act.newLat;
+                c.lng = act.newLng;
+                saveData();
+                renderMapMarkers();
+                if (map) map.flyTo([c.lat, c.lng], 16); // 貼心視角：地圖自動飛到重做的地標處
+            }
+        }
+        
         function updateSidebarFilterOptions() { let select = document.getElementById('sidebarRegionFilter'); let html = '<option value="all">-- 顯示所有區域 --</option>' + appData.regions.map(r => `<option value="${r}">${r}</option>`).join(''); if(select) select.innerHTML = html; }
         function updateTalkFilterOptions() { let select = document.getElementById('talkRegionFilter'); let html = '<option value="all">-- 顯示所有區域 --</option>' + appData.regions.map(r => `<option value="${r}">${r}</option>`).join(''); if(select) select.innerHTML = html; }
 
