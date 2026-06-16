@@ -853,6 +853,10 @@
         let appData = { customers: [], products: [], categories: [], brands: [], regions: [], trash: { customers: [], products: [], records: [], regions: [], categories: [], brands: [] } };
         
         let map, markers = {};
+
+        let mapDragHistory = []; // 儲存上一步紀錄
+        let mapDragFuture = [];  // 儲存重做紀錄
+        
         let currentTalkCustomerId = null;
         let currentQuoteCustomerId = null; 
         let editRecordIndex = null;
