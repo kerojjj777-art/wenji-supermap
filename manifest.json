@@ -1,6 +1,6 @@
 {
   "name": "汶記 SuperMap",
-  "short_name": "SuperMap",
+  "short_name": "汶記SuperMap",
   "description": "企業雲端資料庫與地圖商務系統",
   "start_url": "./index.html",
   "display": "standalone",
