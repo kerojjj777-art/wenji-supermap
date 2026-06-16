@@ -3,6 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
     <title>汶記Super Map (雲端同步版)</title>
     
     <link rel="manifest" href="./manifest.json">
@@ -323,7 +327,7 @@
 
     <div class="header">
         <h1>汶記Super Map</h1>
-        <div class="version">v.2.0.0 (Cloud 雲端同步版)</div>
+        <div class="version">v.2.1.0｜Design by 儒儒魏大哥</div>
     </div>
 
     <div id="caishenContainer" class="caishen-idle" onclick="triggerCaishen()">
@@ -560,9 +564,9 @@
                 <div class="form-group" style="background: #edf2f7; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 4px 0;" onclick="toggleProductSearcher()">
                         <span style="font-weight: bold; color: #2b6cb0;">🔍 展開/收合分類檢索器</span>
-                        <span id="productSearcherIcon" style="color: #2b6cb0; font-weight: bold;">▼</span>
+                        <span id="productSearcherIcon" style="color: #2b6cb0; font-weight: bold;">▲</span>
                     </div>
-                    <div id="productSearcherContent" style="display: block; margin-top: 10px; border-top: 1px dashed #cbd5e0; padding-top: 10px;">
+                    <div id="productSearcherContent" style="display: none; margin-top: 10px; border-top: 1px dashed #cbd5e0; padding-top: 10px;">
                         <label style="color:#2b6cb0; font-size:14px; font-weight:bold;">🔍 關鍵字搜尋商品：</label>
                         <input type="text" id="productSearch" oninput="renderProducts()" placeholder="輸入商品名稱快速搜尋..." style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px; margin-bottom:10px;">
                         
@@ -956,7 +960,7 @@
         map = L.map('map').setView([22.67, 120.48], 11); 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map);
 
-        const regions = { pingtung: [22.55, 120.54], kaohsiung: [22.62, 120.31], tainan: [22.99, 120.21], taichung: [24.14, 120.68], taipei: [25.03, 121.56], taiwan: [23.69, 120.96] };
+        const regions = { pingtung: [22.55, 120.54], kaohsiung: [22.62, 120.31], tainan: [22.99, 120.21], ta台中: [24.14, 120.68], taipei: [25.03, 121.56], taiwan: [23.69, 120.96] };
         function zoomToRegion(val) { if(regions[val]) map.flyTo(regions[val], val === 'taiwan' ? 7 : 12); }
 
         function toggleTopMenu() {
@@ -1671,11 +1675,38 @@
             });
         });
 
-        // 註冊 PWA Service Worker
+        // 註冊 PWA Service Worker 與強制更新機制
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
-                .then(reg => console.log('Service Worker 已成功註冊！', reg))
+                .then(reg => {
+                    console.log('Service Worker 已成功註冊！', reg);
+                    
+                    // 偵測是否有新版本的 Service Worker 安裝中
+                    reg.onupdatefound = () => {
+                        const installingWorker = reg.installing;
+                        installingWorker.onstatechange = () => {
+                            if (installingWorker.state === 'installed') {
+                                if (navigator.serviceWorker.controller) {
+                                    // 已經有舊版在跑，代表這是新版更新
+                                    alert("系統已更新，即將為您重新載入最新版本！");
+                                    
+                                    // 強制清除快取 API 保險機制 (清除舊版資源)
+                                    if ('caches' in window) {
+                                        caches.keys().then(names => {
+                                            Promise.all(names.map(name => caches.delete(name)))
+                                            .then(() => {
+                                                window.location.reload(true);
+                                            });
+                                        });
+                                    } else {
+                                        window.location.reload(true);
+                                    }
+                                }
+                            }
+                        };
+                    };
+                })
                 .catch(err => console.error('Service Worker 註冊失敗：', err));
             });
         }
