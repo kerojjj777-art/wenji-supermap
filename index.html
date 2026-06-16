@@ -328,7 +328,7 @@
 
     <div class="header">
         <h1>汶記Super Map</h1>
-        <div class="version">v.2.1.5｜Design by 儒儒魏大哥</div>
+        <div class="version">v.2.1.6｜Design by 儒儒魏大哥</div>
     </div>
 
     <div id="caishenContainer" class="caishen-idle" onclick="triggerCaishen()">
@@ -1388,6 +1388,37 @@ htmlStr += `<tr>
                 htmlStr += `<tr><td style="font-weight:bold; color:#2d3748;">${p.name}</td><td>${p.brand || '無'}</td><td>${p.type}</td><td style="text-align:center;"><button type="button" class="btn-primary" style="padding:4px 12px; font-size:12px; background:#dd6b20;" onclick="selectProductForQuote('${p.id}', '${safeName}')">選取</button></td></tr>`;
             }); document.getElementById('selectProductTableBody').innerHTML = htmlStr || '<tr><td colspan="4" style="text-align:center;color:#a0aec0;">找不到符合條件的商品</td></tr>';
         }
+
+        // 匯出商品清單至 Excel (CSV 格式)
+function exportProductsToExcel() {
+    if (!appData.products || appData.products.length === 0) {
+        return alert("目前沒有商品可以匯出！");
+    }
+    
+    // 加入 BOM 標記，確保 Excel 開啟中文不會變成亂碼
+    let csvContent = "\uFEFF"; 
+    csvContent += "商品名稱,品牌,分類,成本,定價,毛利率(%)\n";
+    
+    let sortedProducts = sortProductsAlphaNumeric([...appData.products]);
+    sortedProducts.forEach(p => {
+        let cost = p.cost || 0;
+        let price = p.price || 0;
+        let profitPercent = price ? (((price - cost) / price) * 100).toFixed(1) : "0.0";
+        // 將包含逗號或特殊字元的名稱用雙引號包裝避免跑版
+        csvContent += `"${p.name}","${p.brand || '無'}","${p.type}",${cost},${price},${profitPercent}%\n`;
+    });
+    
+    // 建立下載連結並觸發
+    let blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    let link = document.createElement("a");
+    let url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "商品管理清單.csv");
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
 
         function selectProductForQuote(pId, pName) { if(!currentSelectingQuoteRowId) return; let row = document.getElementById(currentSelectingQuoteRowId); if(row) { let hiddenInput = row.querySelector('.row-product-select'); hiddenInput.value = pId; let btn = row.querySelector('.product-display-btn'); btn.innerHTML = '📦 ' + pName; btn.style.color = '#2d3748'; btn.style.background = '#fffaf0'; updateQuoteRowInfo(currentSelectingQuoteRowId); } closeModal('selectProductModal'); }
 
