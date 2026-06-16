@@ -588,9 +588,8 @@
                 <table style="margin-top: 0;">
                     <thead><tr>
                         <th style="position:sticky; top:0; z-index:2;">商品名稱</th>
-                        <th style="position:sticky; top:0; z-index:2;">分類</th>
                         <th style="position:sticky; top:0; z-index:2;">品牌</th>
-                        <th style="position:sticky; top:0; z-index:2;">定價</th>
+                        <th style="position:sticky; top:0; z-index:2;">成本價</th>
                         <th style="position:sticky; top:0; z-index:2;">毛利 (%)</th>
                         <th style="min-width: 80px; text-align:center; position:sticky; top:0; z-index:2;">選項</th>
                     </tr></thead>
@@ -1365,8 +1364,9 @@
                 if (filterType !== 'all' && p.type !== filterType) return; if (filterBrand !== 'all' && p.brand !== filterBrand) return; if (searchKeyword && !p.name.toLowerCase().includes(searchKeyword)) return;
                 let profitPercent = p.price ? (((p.price - p.cost) / p.price) * 100).toFixed(1) : "0.0"; let colorHex = Number(profitPercent) > 0 ? '#48bb78' : '#e53e3e';
                 let actionMenuHtml = `<div style="position:relative; display:inline-block; width:100%; text-align:center;"><button type="button" class="btn-primary action-btn-trigger" style="padding:4px 10px; font-size:12px;" onclick="toggleActionMenu('${p.id}')">動作 ▲</button><div id="actionMenu_${p.id}" class="action-menu-content"><button type="button" onclick="editProduct('${p.id}')" style="color:#2b6cb0; font-weight:bold;">✏️ 修改</button><button type="button" onclick="copyProduct('${p.id}')" style="color:#48bb78; font-weight:bold;">📄 複製</button><button type="button" onclick="deleteProduct('${p.id}')" style="color:#e53e3e; font-weight:bold;">🗑️ 刪除</button></div></div>`;
-                htmlStr += `<tr><td><a href="#" onclick="openProductPreview('${p.id}', false); return false;" style="color:#2b6cb0; text-decoration:underline; font-weight:bold;">${p.name}</a></td><td>${p.type}</td><td>${p.brand || '無'}</td><td>$${fmtMoney(p.price)}</td><td style="color:${colorHex}; font-weight:bold;">${profitPercent}%</td><td style="overflow:visible;">${actionMenuHtml}</td></tr>`;
-            }); document.getElementById('productTableBody').innerHTML = htmlStr || '<tr><td colspan="6" style="text-align:center;color:#a0aec0;">找不到符合條件的商品</td></tr>';
+                // 在此移除了分類與定價，並加入成本價 (p.cost)
+                htmlStr += `<tr><td><a href="#" onclick="openProductPreview('${p.id}', false); return false;" style="color:#2b6cb0; text-decoration:underline; font-weight:bold;">${p.name}</a></td><td>${p.brand || '無'}</td><td>$${fmtMoney(p.cost)}</td><td style="color:${colorHex}; font-weight:bold;">${profitPercent}%</td><td style="overflow:visible;">${actionMenuHtml}</td></tr>`;
+            }); document.getElementById('productTableBody').innerHTML = htmlStr || '<tr><td colspan="5" style="text-align:center;color:#a0aec0;">找不到符合條件的商品</td></tr>';
         }
 
         function openSelectProductModal(rowId) { currentSelectingQuoteRowId = rowId; document.getElementById('selectProductSearch').value = ''; document.getElementById('selectProductTypeFilter').innerHTML = document.getElementById('productTypeFilter').innerHTML; document.getElementById('selectProductBrandFilter').innerHTML = document.getElementById('productBrandFilter').innerHTML; openModal('selectProductModal'); renderSelectProductList(); }
