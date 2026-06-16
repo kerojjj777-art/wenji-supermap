@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>汶記Super Map (雲端同步版)</title>
     
     <link rel="manifest" href="./manifest.json">
@@ -288,6 +288,13 @@
 
             /* 便利貼防誤觸：初始無法輸入 */
             .sticky-note textarea { pointer-events: none; }
+            
+            /* 新增：手機版收合搜尋區排列修正 */
+            .product-filter-container { flex-direction: column; }
+
+            /* 新增：手機版分類與品牌管理上下排列 */
+            .brand-cat-flex { flex-direction: column !important; gap: 15px !important; }
+            .brand-cat-right { border-left: none !important; padding-left: 0 !important; border-top: 1px solid #e2e8f0; padding-top: 15px; }
         }
     </style>
 </head>
@@ -391,7 +398,7 @@
             <option value="pingtung">屏東縣</option>
             <option value="kaohsiung">高雄市</option>
             <option value="tainan">台南市</option>
-            <option value="taichung">台中市</option>
+            <option value="ta台中">台中市</option>
             <option value="taipei">台北市</option>
             <option value="taiwan">全台灣視角</option>
         </select>
@@ -480,7 +487,7 @@
     <div id="brandCatManageModal" class="modal-overlay" style="z-index: 2600;">
         <div class="modal" style="width: 550px;">
             <h2>⚙️ 編輯品牌與分類</h2>
-            <div style="display:flex; gap:20px;">
+            <div style="display:flex; gap:20px;" class="brand-cat-flex">
                 <div style="flex:1;">
                     <h3 style="font-size:15px; color:#2b6cb0; margin-bottom:10px;">📦 分類管理</h3>
                     <div style="display:flex; gap:5px; margin-bottom:10px;">
@@ -493,7 +500,7 @@
                         </table>
                     </div>
                 </div>
-                <div style="flex:1; border-left:1px solid #e2e8f0; padding-left:20px;">
+                <div style="flex:1; border-left:1px solid #e2e8f0; padding-left:20px;" class="brand-cat-right">
                     <h3 style="font-size:15px; color:#dd6b20; margin-bottom:10px;">🏷️ 品牌管理</h3>
                     <div style="display:flex; gap:5px; margin-bottom:10px;">
                         <input type="text" id="newBrandName" placeholder="新品牌..." style="flex:1; padding:6px; font-size:13px;">
@@ -549,25 +556,39 @@
                         <button type="button" class="btn-primary" onclick="openModal('addProductModal')" style="padding:8px 15px;">+ 新增品項</button>
                     </div>
                 </div>
+                
                 <div class="form-group" style="background: #edf2f7; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
-                    <label style="color:#2b6cb0; font-size:14px; font-weight:bold;">🔍 關鍵字搜尋商品：</label>
-                    <input type="text" id="productSearch" oninput="renderProducts()" placeholder="輸入商品名稱快速搜尋..." style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px; margin-bottom:10px;">
-                    
-                    <div style="display:flex; gap:10px;">
-                        <div style="flex:1;">
-                            <label style="color:#2b6cb0; font-size:14px; font-weight:bold;">📦 按商品分類篩選：</label>
-                            <select id="productTypeFilter" onchange="renderProducts()" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px;"></select>
-                        </div>
-                        <div style="flex:1;">
-                            <label style="color:#2b6cb0; font-size:14px; font-weight:bold;">🏷️ 按品牌篩選：</label>
-                            <select id="productBrandFilter" onchange="renderProducts()" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px;"></select>
+                    <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 4px 0;" onclick="toggleProductSearcher()">
+                        <span style="font-weight: bold; color: #2b6cb0;">🔍 展開/收合分類檢索器</span>
+                        <span id="productSearcherIcon" style="color: #2b6cb0; font-weight: bold;">▼</span>
+                    </div>
+                    <div id="productSearcherContent" style="display: block; margin-top: 10px; border-top: 1px dashed #cbd5e0; padding-top: 10px;">
+                        <label style="color:#2b6cb0; font-size:14px; font-weight:bold;">🔍 關鍵字搜尋商品：</label>
+                        <input type="text" id="productSearch" oninput="renderProducts()" placeholder="輸入商品名稱快速搜尋..." style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px; margin-bottom:10px;">
+                        
+                        <div style="display:flex; gap:10px;" class="product-filter-container">
+                            <div style="flex:1;">
+                                <label style="color:#2b6cb0; font-size:14px; font-weight:bold;">📦 按分類管理：</label>
+                                <select id="productTypeFilter" onchange="renderProducts()" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px;"></select>
+                            </div>
+                            <div style="flex:1;">
+                                <label style="color:#2b6cb0; font-size:14px; font-weight:bold;">🏷️ 按品牌篩選：</label>
+                                <select id="productBrandFilter" onchange="renderProducts()" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e0; font-weight:bold; margin-top:5px;"></select>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
             <div style="flex: 1; overflow-y: auto; padding-right: 5px; padding-bottom: 150px;">
                 <table style="margin-top: 0;">
-                    <thead><tr><th style="position:sticky; top:0; z-index:2;">品項名稱</th><th style="position:sticky; top:0; z-index:2;">品牌</th><th style="position:sticky; top:0; z-index:2;">分類</th><th style="position:sticky; top:0; z-index:2;">成本價</th><th style="position:sticky; top:0; z-index:2;">定價</th><th style="position:sticky; top:0; z-index:2;">毛利 (%)</th><th style="min-width: 80px; text-align:center; position:sticky; top:0; z-index:2;">選項</th></tr></thead>
+                    <thead><tr>
+                        <th style="position:sticky; top:0; z-index:2;">商品名稱</th>
+                        <th style="position:sticky; top:0; z-index:2;">分類</th>
+                        <th style="position:sticky; top:0; z-index:2;">品牌</th>
+                        <th style="position:sticky; top:0; z-index:2;">定價</th>
+                        <th style="position:sticky; top:0; z-index:2;">毛利 (%)</th>
+                        <th style="min-width: 80px; text-align:center; position:sticky; top:0; z-index:2;">選項</th>
+                    </tr></thead>
                     <tbody id="productTableBody"></tbody>
                 </table>
             </div>
@@ -829,6 +850,8 @@
         let calCurrentYear = new Date().getFullYear();
         let calCurrentMonth = new Date().getMonth();
         let currentSelectingQuoteRowId = null;
+        let isFirstLoad = true;
+        let unsubscribeSnapshot = null;
 
         const caishenPhrases = [
             "和氣生財，日進斗金！", "財源廣進，大吉大利！", "金玉滿堂，富貴吉祥！", 
@@ -861,13 +884,22 @@
             } else {
                 document.getElementById('loginOverlay').style.display = 'flex';
                 document.getElementById('loadingOverlay').style.display = 'none';
+                if (unsubscribeSnapshot) {
+                    unsubscribeSnapshot();
+                    unsubscribeSnapshot = null;
+                }
             }
         });
 
-        async function loadDataFromCloud() {
-            try {
-                let docRef = db.collection("wenjiData").doc("main");
-                let docSnap = await docRef.get();
+        function loadDataFromCloud() {
+            let docRef = db.collection("wenjiData").doc("main");
+            
+            if (unsubscribeSnapshot) {
+                unsubscribeSnapshot();
+            }
+
+            // 即時監聽：當其他裝置修改資料，會自動觸發此處更新
+            unsubscribeSnapshot = docRef.onSnapshot((docSnap) => {
                 if (docSnap.exists) {
                     let data = docSnap.data();
                     appData.customers = data.customers || [];
@@ -877,27 +909,45 @@
                     appData.regions = data.regions || ['屏東市', '潮州鎮', '東港鎮'];
                     appData.trash = data.trash || { customers: [], products: [], records: [], regions: [], categories: [], brands: [] };
                 } else {
-                    await saveData();
+                    saveData();
                 }
                 
+                // 無論是初次載入或收到更新，都刷新公用元件與依賴的視窗
                 updateCategoryBrandDropdowns();
                 updateRegionDatalist();
                 updateSidebarFilterOptions();
                 updateTalkFilterOptions();
                 renderMapMarkers();
                 
-                document.getElementById('loadingOverlay').style.display = 'none';
-            } catch(e) {
-                alert("載入資料失敗：" + e.message);
-                document.getElementById('loadingOverlay').style.display = 'none';
-            }
+                if (document.getElementById('productModal').style.display === 'flex') renderProducts();
+                if (document.getElementById('catalogModal').style.display === 'flex') renderCatalog();
+                if (document.getElementById('sidebar').classList.contains('active')) renderSidebar();
+                if (document.getElementById('selectTalkModal').style.display === 'flex') {
+                    renderRecentTalks();
+                    renderTalkCustomerList();
+                }
+                if (document.getElementById('timelineModal').style.display === 'flex' && currentTalkCustomerId) {
+                    renderTimeline();
+                    renderBossPanel();
+                }
+                
+                if (isFirstLoad) {
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                    isFirstLoad = false;
+                }
+            }, (error) => {
+                console.error("雲端監聽失敗：", error);
+                alert("資料同步中斷：" + error.message);
+                if (isFirstLoad) {
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                }
+            });
         }
 
         function saveData() {
             db.collection("wenjiData").doc("main").set(appData).catch(err => {
                 console.error("雲端同步失敗", err);
             });
-            renderMapMarkers();
         }
 
         // --- 介面與操作邏輯 ---
@@ -926,6 +976,18 @@
                 let modalEl = document.querySelector('#' + id + ' > .modal');
                 if (modalEl) modalEl.scrollTop = 0;
                 if (id === 'dashboardModal') { let dashContent = document.getElementById('dashboardContent'); if(dashContent) dashContent.scrollTop = 0; }
+            }
+        }
+
+        function toggleProductSearcher() {
+            let content = document.getElementById('productSearcherContent');
+            let icon = document.getElementById('productSearcherIcon');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.textContent = '▼';
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '▲';
             }
         }
 
@@ -1298,8 +1360,8 @@
                 if (filterType !== 'all' && p.type !== filterType) return; if (filterBrand !== 'all' && p.brand !== filterBrand) return; if (searchKeyword && !p.name.toLowerCase().includes(searchKeyword)) return;
                 let profitPercent = p.price ? (((p.price - p.cost) / p.price) * 100).toFixed(1) : "0.0"; let colorHex = Number(profitPercent) > 0 ? '#48bb78' : '#e53e3e';
                 let actionMenuHtml = `<div style="position:relative; display:inline-block; width:100%; text-align:center;"><button type="button" class="btn-primary action-btn-trigger" style="padding:4px 10px; font-size:12px;" onclick="toggleActionMenu('${p.id}')">動作 ▲</button><div id="actionMenu_${p.id}" class="action-menu-content"><button type="button" onclick="editProduct('${p.id}')" style="color:#2b6cb0; font-weight:bold;">✏️ 修改</button><button type="button" onclick="copyProduct('${p.id}')" style="color:#48bb78; font-weight:bold;">📄 複製</button><button type="button" onclick="deleteProduct('${p.id}')" style="color:#e53e3e; font-weight:bold;">🗑️ 刪除</button></div></div>`;
-                htmlStr += `<tr><td><a href="#" onclick="openProductPreview('${p.id}', false); return false;" style="color:#2b6cb0; text-decoration:underline; font-weight:bold;">${p.name}</a></td><td>${p.brand || '無'}</td><td>${p.type}</td><td>$${fmtMoney(p.cost)}</td><td>$${fmtMoney(p.price)}</td><td style="color:${colorHex}; font-weight:bold;">${profitPercent}%</td><td style="overflow:visible;">${actionMenuHtml}</td></tr>`;
-            }); document.getElementById('productTableBody').innerHTML = htmlStr || '<tr><td colspan="7" style="text-align:center;color:#a0aec0;">找不到符合條件的商品</td></tr>';
+                htmlStr += `<tr><td><a href="#" onclick="openProductPreview('${p.id}', false); return false;" style="color:#2b6cb0; text-decoration:underline; font-weight:bold;">${p.name}</a></td><td>${p.type}</td><td>${p.brand || '無'}</td><td>$${fmtMoney(p.price)}</td><td style="color:${colorHex}; font-weight:bold;">${profitPercent}%</td><td style="overflow:visible;">${actionMenuHtml}</td></tr>`;
+            }); document.getElementById('productTableBody').innerHTML = htmlStr || '<tr><td colspan="6" style="text-align:center;color:#a0aec0;">找不到符合條件的商品</td></tr>';
         }
 
         function openSelectProductModal(rowId) { currentSelectingQuoteRowId = rowId; document.getElementById('selectProductSearch').value = ''; document.getElementById('selectProductTypeFilter').innerHTML = document.getElementById('productTypeFilter').innerHTML; document.getElementById('selectProductBrandFilter').innerHTML = document.getElementById('productBrandFilter').innerHTML; openModal('selectProductModal'); renderSelectProductList(); }
