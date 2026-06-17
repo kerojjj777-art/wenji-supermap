@@ -356,7 +356,7 @@
 
     <div class="header">
         <h1>汶記Super Map</h1>
-        <div class="version">v.2.1.9｜Design by 儒儒魏大哥</div>
+        <div class="version">v.2.2.0｜Design by 儒儒魏大哥</div>
     </div>
 
     <div id="caishenContainer" class="caishen-idle" onclick="triggerCaishen()">
@@ -1409,16 +1409,17 @@
                 let profitPercent = p.price ? (((p.price - p.cost) / p.price) * 100).toFixed(1) : "0.0"; let colorHex = Number(profitPercent) > 0 ? '#48bb78' : '#e53e3e';
                 let actionMenuHtml = `<div style="position:relative; display:inline-block; width:100%; text-align:center;"><button type="button" class="btn-primary action-btn-trigger" style="padding:4px 10px; font-size:12px;" onclick="toggleActionMenu('${p.id}')">動作 ▲</button><div id="actionMenu_${p.id}" class="action-menu-content"><button type="button" onclick="editProduct('${p.id}')" style="color:#2b6cb0; font-weight:bold;">✏️ 修改</button><button type="button" onclick="copyProduct('${p.id}')" style="color:#48bb78; font-weight:bold;">📄 複製</button><button type="button" onclick="deleteProduct('${p.id}')" style="color:#e53e3e; font-weight:bold;">🗑️ 刪除</button></div></div>`;
                 
-                // 【修改點】將 ${fmtMoney(p.cost)} 移到定價前面，並在 td 加上 text-align:center 讓資料也置中對齊
-htmlStr += `<tr>
-    <td style="text-align:center;"><a href="#" onclick="openProductPreview('${p.id}', false); return false;" style="color:#2b6cb0; text-decoration:underline; font-weight:bold;">${p.name}</a></td>
-    <td style="text-align:center;">${fmtMoney(p.cost)}</td>
-    <td style="text-align:center;">${fmtMoney(p.price)}</td>
-    <td style="color:${colorHex}; font-weight:bold; text-align:center;">${profitPercent}%</td>
-    <td style="overflow:visible; text-align:center;">${actionMenuHtml}</td>
-</tr>`;
-                }); document.getElementById('productTableBody').innerHTML = htmlStr || '<tr><td colspan="5" style="text-align:center;color:#a0aec0;">找不到符合條件的商品</td></tr>';
-            }
+                // 【修改點】將第一個 td 改為 text-align:left; 讓商品名稱靠左對齊
+                htmlStr += `<tr>
+                    <td style="text-align:left;"><a href="#" onclick="openProductPreview('${p.id}', false); return false;" style="color:#2b6cb0; text-decoration:underline; font-weight:bold;">${p.name}</a></td>
+                    <td style="text-align:center;">${fmtMoney(p.cost)}</td>
+                    <td style="text-align:center;">${fmtMoney(p.price)}</td>
+                    <td style="color:${colorHex}; font-weight:bold; text-align:center;">${profitPercent}%</td>
+                    <td style="overflow:visible; text-align:center;">${actionMenuHtml}</td>
+                </tr>`;
+            }); 
+            document.getElementById('productTableBody').innerHTML = htmlStr || '<tr><td colspan="5" style="text-align:center;color:#a0aec0;">找不到符合條件的商品</td></tr>';
+        }
 
         function openSelectProductModal(rowId) { currentSelectingQuoteRowId = rowId; document.getElementById('selectProductSearch').value = ''; document.getElementById('selectProductTypeFilter').innerHTML = document.getElementById('productTypeFilter').innerHTML; document.getElementById('selectProductBrandFilter').innerHTML = document.getElementById('productBrandFilter').innerHTML; openModal('selectProductModal'); renderSelectProductList(); }
 
@@ -1489,7 +1490,7 @@ function exportProductsToExcel() {
         function openProductPreview(id, isCatalog) {
             let p = appData.products.find(x => x.id === id); if(!p) return;
             let photoHtml = p.photo ? `<div class="preview-img-container" onclick="openImageZoom('${p.photo}')" title="點擊放大檢視"><img src="${p.photo}" alt="${p.name}"></div>` : `<div class="preview-img-container" style="background:#f7fafc; cursor:default;"><span style="color:#a0aec0;">暫無商品圖片</span></div>`;
-            let descHtml = p.description ? `<div style="margin-bottom:15px;"><h4 style="margin:0 0 5px 0; color:#718096; font-size:12px;">商品描述</h4><p style="margin:0; font-size:14px; line-height:1.5; color:#4a5568;">${p.description.replace(/\n/g, '<br>')}</p></div>` : '';
+            let descHtml = (p.description && !isCatalog) ? `<div style="margin-bottom:15px;"><h4 style="margin:0 0 5px 0; color:#718096; font-size:12px;">商品描述</h4><p style="margin:0; font-size:14px; line-height:1.5; color:#4a5568;">${p.description.replace(/\n/g, '<br>')}</p></div>` : '';
             let priceSection = '';
             if (!isCatalog) {
                 let profitPercent = p.price ? (((p.price - p.cost) / p.price) * 100).toFixed(1) : "0.0"; let colorHex = Number(profitPercent) > 0 ? '#48bb78' : '#e53e3e';
