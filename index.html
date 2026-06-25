@@ -1125,9 +1125,31 @@
         }
 
         window.onclick = function(event) {
+            // 1. 關閉商品列表的動作下拉選單
             if (!event.target.matches('.action-btn-trigger')) {
                 let dropdowns = document.querySelectorAll(".action-menu-content.show");
                 dropdowns.forEach(d => d.classList.remove('show'));
+            }
+
+            // 2. 點擊 Modal 外部 (半透明遮罩層) 時，自動關閉該 Modal
+            if (event.target.classList.contains('modal-overlay')) {
+                closeModal(event.target.id);
+            }
+
+            // 3. 點擊側邊欄外部時，自動收合側邊欄 (排除點擊觸發按鈕本身)
+            let sidebar = document.getElementById('sidebar');
+            if (sidebar && sidebar.classList.contains('active')) {
+                if (!sidebar.contains(event.target) && !event.target.closest('[onclick*="toggleSidebar"]')) {
+                    toggleSidebar();
+                }
+            }
+
+            // 4. 點擊右上角工具選單外部時，自動收合選單 (排除點擊觸發按鈕本身)
+            let topMenu = document.getElementById('topMenu');
+            if (topMenu && topMenu.classList.contains('active')) {
+                if (!topMenu.contains(event.target) && !event.target.closest('[onclick*="toggleTopMenu"]')) {
+                    closeTopMenu();
+                }
             }
         };
 
